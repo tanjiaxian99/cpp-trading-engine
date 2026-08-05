@@ -1,0 +1,25 @@
+# Private working notes
+NOTES.private.md
+
+# Credentials — never commit
+.env
+*.key
+secrets.*
+
+# Build output
+build/
+cmake-build-*/
+compile_commands.json
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Benchmark artifacts
+*.hdr
+data/*.itch
+data/*.pcap
+
+# Claude
+.claude

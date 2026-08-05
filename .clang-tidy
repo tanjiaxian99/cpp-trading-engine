@@ -1,0 +1,14 @@
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  modernize-*,
+  cppcoreguidelines-pro-type-*,
+  cppcoreguidelines-slicing,
+  cppcoreguidelines-special-member-functions,
+  -modernize-use-trailing-return-type,
+  -bugprone-easily-swappable-parameters
+
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*'
+FormatStyle: file
