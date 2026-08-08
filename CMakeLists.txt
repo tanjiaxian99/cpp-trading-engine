@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 
-if(POLICY CMP0167)
+if (POLICY CMP0167)
     cmake_policy(SET CMP0167 NEW)
-endif()
+endif ()
 
 project(trading_engine CXX)
 
@@ -22,7 +22,7 @@ set(CLION_CLANG_FORMAT_HINT "/Applications/CLion.app/Contents/plugins/clion-radl
 # Must be set before add_executable(): CXX_CLANG_TIDY is a target property
 # seeded from this variable at target-creation time, not read afterward.
 option(ENABLE_CLANG_TIDY "Run clang-tidy as part of the build" OFF)
-if(ENABLE_CLANG_TIDY)
+if (ENABLE_CLANG_TIDY)
     find_program(CLANG_TIDY_EXE NAMES clang-tidy HINTS "${CLION_CLANG_TIDY_HINT}" REQUIRED)
     execute_process(COMMAND xcrun --show-sdk-path OUTPUT_VARIABLE MACOS_SDK_PATH OUTPUT_STRIP_TRAILING_WHITESPACE)
     execute_process(COMMAND clang -print-resource-dir OUTPUT_VARIABLE APPLE_CLANG_RESOURCE_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -30,39 +30,39 @@ if(ENABLE_CLANG_TIDY)
     # and doesn't infer the SDK sysroot the way /usr/bin/c++ does — borrow both from
     # Apple clang, which is what actually compiles this project.
     set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE}"
-        "--extra-arg=-isysroot${MACOS_SDK_PATH}"
-        "--extra-arg=-resource-dir=${APPLE_CLANG_RESOURCE_DIR}")
-endif()
+            "--extra-arg=-isysroot${MACOS_SDK_PATH}"
+            "--extra-arg=-resource-dir=${APPLE_CLANG_RESOURCE_DIR}")
+endif ()
 
-add_executable(trading_engine main.cpp)
+add_executable(trading_engine main.cpp config.hpp transport.hpp transport.cpp)
 
 target_compile_options(trading_engine PRIVATE
-    -Wall -Wextra -Wpedantic
+        -Wall -Wextra -Wpedantic
 )
 
 target_link_libraries(trading_engine PRIVATE
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    Boost::boost
-    CURL::libcurl
+        OpenSSL::SSL
+        OpenSSL::Crypto
+        Boost::boost
+        CURL::libcurl
 )
 
 find_program(CLANG_FORMAT_EXE NAMES clang-format HINTS "${CLION_CLANG_FORMAT_HINT}")
-if(CLANG_FORMAT_EXE)
+if (CLANG_FORMAT_EXE)
     file(GLOB_RECURSE ALL_SOURCE_FILES
-        "${CMAKE_SOURCE_DIR}/*.cpp"
-        "${CMAKE_SOURCE_DIR}/*.hpp"
-        "${CMAKE_SOURCE_DIR}/*.h"
+            "${CMAKE_SOURCE_DIR}/*.cpp"
+            "${CMAKE_SOURCE_DIR}/*.hpp"
+            "${CMAKE_SOURCE_DIR}/*.h"
     )
     list(FILTER ALL_SOURCE_FILES EXCLUDE REGEX "${CMAKE_SOURCE_DIR}/build/.*")
     list(FILTER ALL_SOURCE_FILES EXCLUDE REGEX "${CMAKE_SOURCE_DIR}/cmake-build-.*")
 
     add_custom_target(format
-        COMMAND ${CLANG_FORMAT_EXE} -i ${ALL_SOURCE_FILES}
-        COMMENT "Formatting source files with clang-format"
+            COMMAND ${CLANG_FORMAT_EXE} -i ${ALL_SOURCE_FILES}
+            COMMENT "Formatting source files with clang-format"
     )
     add_custom_target(format-check
-        COMMAND ${CLANG_FORMAT_EXE} --dry-run --Werror ${ALL_SOURCE_FILES}
-        COMMENT "Checking formatting with clang-format"
+            COMMAND ${CLANG_FORMAT_EXE} --dry-run --Werror ${ALL_SOURCE_FILES}
+            COMMENT "Checking formatting with clang-format"
     )
-endif()
+endif ()

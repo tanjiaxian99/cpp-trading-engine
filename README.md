@@ -151,10 +151,14 @@ and cancelled. Synchronous and ugly is fine.
 
 Asio owns readiness and TLS; everything above the byte stream is in-tree.
 
-- [ ] `io_context`, resolver, `asio::ssl::stream<tcp::socket>`, cert verification, SNI — **1 h**
-- [ ] `TCP_NODELAY`; connect + TLS handshake to `wspap.okx.com:8443` — **0.5 h**
-- [ ] Fixed-capacity RX/TX ring buffers behind Asio's read/write — **1 h**
-- [ ] Smoke test: TLS connect, read bytes — **0.5 h**
+- [x] `io_context`, resolver, `asio::ssl::stream<tcp::socket>`, cert verification, SNI — **1 h**
+- [x] `TCP_NODELAY`; connect + TLS handshake to `wspap.okx.com:8443` — **0.5 h**
+- [x] Smoke test: TLS connect, read bytes — **0.5 h**
+
+> Fixed-capacity RX/TX ring buffers (originally scoped here) moved to B1 — there's nothing to
+> accumulate into a ring until the WebSocket codec exists to read out of one. A1 only ever did a
+> single one-shot blocking read into a throwaway stack buffer, which doesn't exercise ring
+> semantics (write cursor, wraparound, multi-call accumulation) at all.
 
 > Buffers stay engine-owned even though Asio could manage them — that ownership is what makes
 > in-place parsing possible later. Asio's responsibility ends at "bytes arrived."
@@ -226,6 +230,8 @@ disconnects, with risk limits and a kill switch.
 
 Written from RFC 6455.
 
+- [ ] Fixed-capacity RX/TX ring buffers behind Asio's read/write, engine-owned so parsing can
+      happen in place off them — **1 h**
 - [ ] Handshake: random `Sec-WebSocket-Key`, base64, verify `Sec-WebSocket-Accept` — **2 h**
 - [ ] Frame decoder: FIN/opcode, 7 / 16 / 64-bit payload lengths — **3.5 h**
 - [ ] Frame encoder with mandatory client-side masking — **1.5 h**
