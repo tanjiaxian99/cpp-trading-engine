@@ -11,13 +11,17 @@ struct Config {
 
     static Config FromEnv() {
         Config config;
-        config.api_key = ReadRequired("OKX_API_KEY");
-        config.api_secret = ReadRequired("OKX_API_SECRET");
-        config.passphrase = ReadRequired("OKX_PASSPHRASE");
+        config.api_key = ReadRequired(kApiKeyEnvVar);
+        config.api_secret = ReadRequired(kApiSecretEnvVar);
+        config.passphrase = ReadRequired(kPassphraseEnvVar);
         return config;
     }
 
 private:
+    static constexpr const char* kApiKeyEnvVar = "OKX_API_KEY";
+    static constexpr const char* kApiSecretEnvVar = "OKX_API_SECRET";
+    static constexpr const char* kPassphraseEnvVar = "OKX_PASSPHRASE";
+
     static std::string ReadRequired(const char* name) {
         const char* value = std::getenv(name);
         if (value == nullptr || value[0] == '\0') {

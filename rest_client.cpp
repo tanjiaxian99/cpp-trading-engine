@@ -11,9 +11,7 @@ namespace {
 void EnsureCurlGlobalInit() {
     // curl_global_init is not thread-safe and should only be called once
     static std::once_flag flag;
-    std::call_once(flag, [] {
-        curl_global_init(CURL_GLOBAL_DEFAULT);
-    });
+    std::call_once(flag, [] { curl_global_init(CURL_GLOBAL_DEFAULT); });
 }
 
 // Override default std::unique_ptr behaviour to free curl_slist* the curl way
@@ -32,7 +30,7 @@ size_t WriteCallback(char* ptr, size_t size, size_t nmemb, void* userdata) {
     body->append(ptr, size * nmemb);
     return size * nmemb;
 }
-}
+}  // namespace
 
 // Override default std::unique_ptr behaviour to free CURL* the curl way
 void RestClient::CurlDeleter::operator()(CURL* handle) const {
@@ -48,7 +46,7 @@ RestClient::RestClient(std::string base_url) : base_url_(std::move(base_url)) {
 }
 
 Response RestClient::Get(const std::string_view path, const std::vector<std::string>& headers) {
-    curl_easy_reset(handle_.get()); // Clear out options set in the previous HTTP call
+    curl_easy_reset(handle_.get());  // Clear out options set in the previous HTTP call
     curl_easy_setopt(handle_.get(), CURLOPT_HTTPGET, 1L);
     return Perform(path, headers);
 }
@@ -60,7 +58,7 @@ Response RestClient::Post(const std::string_view path, const std::string_view bo
     // std::string_view::data can be the window of the middle of a string, which wouldn't
     // have \0. We thus need to pass the size of the body
     curl_easy_setopt(handle_.get(), CURLOPT_POSTFIELDS,
-                     body.data()); // NOLINT(bugprone-suspicious-stringview-data-usage)
+                     body.data());  // NOLINT(bugprone-suspicious-stringview-data-usage)
     curl_easy_setopt(handle_.get(), CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
     return Perform(path, headers);
 }
@@ -90,7 +88,7 @@ Response RestClient::Perform(const std::string_view path, const std::vector<std:
         throw std::runtime_error(std::string("curl request failed: ") + curl_easy_strerror(result));
     }
 
-    long status_code = 0; // libcurl requires a long for response code
+    long status_code = 0;  // libcurl requires a long for response code
     curl_easy_getinfo(handle_.get(), CURLINFO_RESPONSE_CODE, &status_code);
     response.status_code = static_cast<int>(status_code);
     return response;

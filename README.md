@@ -182,14 +182,19 @@ prehash = OK-ACCESS-TIMESTAMP + METHOD + requestPath + body
 sign    = base64( HMAC_SHA256(prehash, secret) )
 ```
 
-- [ ] ISO 8601 UTC timestamp with millisecond precision, `...Z` suffix — **0.5 h**
-- [ ] HMAC-SHA256 + base64 encoding via OpenSSL `EVP` — **1 h**
-- [ ] Prehash assembly — method uppercased, query string included in `requestPath`,
+- [x] ISO 8601 UTC timestamp with millisecond precision, `...Z` suffix — **0.5 h**
+- [x] HMAC-SHA256 + base64 encoding via OpenSSL `EVP` — **1 h**
+- [x] Prehash assembly — method uppercased, query string included in `requestPath`,
       body byte-identical to what is actually sent — **1 h**
-- [ ] Headers via `curl_slist`: `OK-ACCESS-KEY`, `OK-ACCESS-SIGN`, `OK-ACCESS-TIMESTAMP`,
+- [x] Headers via `curl_slist`: `OK-ACCESS-KEY`, `OK-ACCESS-SIGN`, `OK-ACCESS-TIMESTAMP`,
       `OK-ACCESS-PASSPHRASE`, plus the `x-simulated-trading: 1` guard — **0.5 h**
-- [ ] Signed `GET /api/v5/account/balance`, parse it — **1.5 h**
-- [ ] Clock drift check against `GET /api/v5/public/time` — **0.5 h**
+- [x] Signed `GET /api/v5/account/balance`, parse it — **1.5 h**
+- [x] Clock drift check against `GET /api/v5/public/time` — **0.5 h**
+
+> Response parsing here is intentionally minimal — a one-off `ts`-field extraction for the
+> clock-drift check, not general JSON parsing. The real targeted field scanner and two-level
+> response envelope handling belong to A4; building them early here would be reaching ahead of
+> scope.
 
 ### A4 · Order entry — 5–7 h
 
