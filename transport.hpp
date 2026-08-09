@@ -6,7 +6,6 @@
 
 namespace asio = boost::asio;
 
-
 class Transport {
 public:
     Transport(std::string host, std::string port);

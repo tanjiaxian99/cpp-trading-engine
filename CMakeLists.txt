@@ -34,7 +34,8 @@ if (ENABLE_CLANG_TIDY)
             "--extra-arg=-resource-dir=${APPLE_CLANG_RESOURCE_DIR}")
 endif ()
 
-add_executable(trading_engine main.cpp config.hpp transport.hpp transport.cpp)
+add_executable(trading_engine main.cpp config.hpp transport.hpp transport.cpp rest_client.hpp
+        rest_client.cpp)
 
 target_compile_options(trading_engine PRIVATE
         -Wall -Wextra -Wpedantic

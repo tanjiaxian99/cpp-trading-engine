@@ -3,12 +3,19 @@
 #include <iostream>
 
 #include "config.hpp"
+#include "rest_client.hpp"
 #include "transport.hpp"
 
 int main() {
     try {
         const Config config = Config::FromEnv();
         std::cout << "loaded config for key " << config.api_key << "\n";
+
+        // Public, unauthenticated endpoint — proves RestClient works
+        // end-to-end without needing the signed-request auth from A3.
+        RestClient rest_client("https://www.okx.com");
+        const Response response = rest_client.Get("/api/v5/public/time");
+        std::cout << "REST status " << response.status_code << ": " << response.body << "\n";
 
         Transport transport("wspap.okx.com", "8443");
         transport.Connect();

@@ -165,8 +165,8 @@ Asio owns readiness and TLS; everything above the byte stream is in-tree.
 
 ### A2 · REST client via libcurl — 1–2 h
 
-- [ ] Thin `RestClient` wrapper: `curl_easy` handle, method, path, headers, body, timeout — **1 h**
-- [ ] Reuse one handle per thread so connections stay pooled across calls — **0.5 h**
+- [x] Thin `RestClient` wrapper: `curl_easy` handle, method, path, headers, body, timeout — **1 h**
+- [x] Reuse one handle per thread so connections stay pooled across calls — **0.5 h**
 
 > Keep this behind a narrow interface (`Response get(path)` / `Response post(path, body)`).
 > Moving the REST path onto the in-tree transport later then touches only this file.
