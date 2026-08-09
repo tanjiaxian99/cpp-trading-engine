@@ -27,11 +27,11 @@ std::size_t SkipValue(std::string_view json, std::size_t pos) {
         pos++;
         while (pos < json.size() && json[pos] != '"') {
             if (json[pos] == '\\') {
-                pos++; // Also skip the character the backslash escapes
+                pos++;  // Also skip the character the backslash escapes
             }
             pos++;
         }
-        return pos + 1; // Skip past the closing quote
+        return pos + 1;  // Skip past the closing quote
     }
 
     if (json[pos] == '{' || json[pos] == '[') {
@@ -79,7 +79,7 @@ std::size_t FindValueStart(std::string_view json, std::string_view key) {
         search_from = key_pos + pattern.size();
     }
 }
-} // namespace
+}  // namespace
 
 std::optional<std::string_view> FindString(std::string_view json, std::string_view key) {
     const std::size_t value_start = FindValueStart(json, key);
@@ -151,4 +151,4 @@ std::optional<std::string_view> FindArrayElement(std::string_view json, std::str
     const std::size_t element_end = SkipValue(json, pos);
     return json.substr(element_start, element_end - element_start);
 }
-} // namespace json
+}  // namespace json

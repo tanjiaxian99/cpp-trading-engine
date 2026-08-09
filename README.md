@@ -199,7 +199,7 @@ sign    = base64( HMAC_SHA256(prehash, secret) )
 ### A4 · Order entry — 5–7 h
 
 - [x] Targeted JSON field scanner — locate key, extract number/string in place, no DOM — **2 h**
-- [ ] Instrument specs from `GET /api/v5/public/instruments?instType=SPOT`:
+- [x] Instrument specs from `GET /api/v5/public/instruments?instType=SPOT`:
       `tickSz`, `lotSz`, `minSz` — **1.5 h**
 - [ ] `POST /api/v5/trade/order` — `instId`, `tdMode: "cash"`, `side`, `ordType`, `px`,
       `sz`, `clOrdId` — **2 h**

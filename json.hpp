@@ -13,4 +13,4 @@ std::optional<std::string_view> FindNumber(std::string_view json, std::string_vi
 // Extracts the Nth element of an array, i.e. 0th element of {"data":[{"a":1}]} -> {"a":1}
 std::optional<std::string_view> FindArrayElement(std::string_view json, std::string_view key,
                                                  std::size_t index);
-}
+}  // namespace json

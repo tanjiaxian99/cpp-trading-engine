@@ -7,12 +7,12 @@
 
 #include "auth.hpp"
 #include "config.hpp"
+#include "instrument.hpp"
 #include "json.hpp"
 #include "rest_client.hpp"
 #include "transport.hpp"
 
 namespace {
-
 // Extracts the server timestamp from /public/time's response, e.g.
 // {"code":"0","data":[{"ts":"1786204129995"}],"msg":""}, using the
 // general-purpose scanner (json::FindArrayElement + json::FindString)
@@ -28,7 +28,6 @@ long long ExtractTimestampMs(const std::string& public_time_body) {
     }
     return std::stoll(std::string(*ts));
 }
-
 }  // namespace
 
 int main() {
@@ -40,7 +39,7 @@ int main() {
 
         // Public, unauthenticated endpoint — also used below for the clock
         // drift check A3 requires before signed requests can be trusted.
-        const Response time_response = rest_client.Get("/api/v5/public/time");
+        const HttpResponse time_response = rest_client.Get("/api/v5/public/time");
         std::cout << "REST status " << time_response.status_code << ": " << time_response.body
                   << "\n";
 
@@ -53,10 +52,16 @@ int main() {
         // Signed request — proves the A3 auth/signing path end-to-end.
         const OkxAuth auth(config.api_key, config.api_secret, config.passphrase);
         const std::string balance_path = "/api/v5/account/balance";
-        const Response balance_response =
+        const HttpResponse balance_response =
             rest_client.Get(balance_path, auth.SignHeaders("GET", balance_path));
         std::cout << "balance status " << balance_response.status_code << ": "
                   << balance_response.body << "\n";
+
+        // Public, unauthenticated endpoint — proves instrument-spec fetch
+        // and parsing end-to-end.
+        const InstrumentSpec spec = FetchInstrumentSpec(rest_client, "BTC-USDT");
+        std::cout << "BTC-USDT: tickSz=" << spec.tick_sz << " lotSz=" << spec.lot_sz
+                  << " minSz=" << spec.min_sz << "\n";
 
         Transport transport("wspap.okx.com", "8443");
         transport.Connect();
@@ -67,8 +72,8 @@ int main() {
         // the transport layer works — it may block for a while before the
         // far end drops the connection. That's expected here, not a bug.
         std::array<char, 4096> buf{};
-        const std::size_t n = transport.ReadSome(asio::buffer(buf));
-        std::cout << "read " << n << " bytes\n";
+        // const std::size_t n = transport.ReadSome(asio::buffer(buf));
+        // std::cout << "read " << n << " bytes\n";
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "fatal: " << e.what() << "\n";

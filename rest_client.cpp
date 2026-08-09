@@ -45,14 +45,14 @@ RestClient::RestClient(std::string base_url) : base_url_(std::move(base_url)) {
     }
 }
 
-Response RestClient::Get(const std::string_view path, const std::vector<std::string>& headers) {
+HttpResponse RestClient::Get(const std::string_view path, const std::vector<std::string>& headers) {
     curl_easy_reset(handle_.get());  // Clear out options set in the previous HTTP call
     curl_easy_setopt(handle_.get(), CURLOPT_HTTPGET, 1L);
     return Perform(path, headers);
 }
 
-Response RestClient::Post(const std::string_view path, const std::string_view body,
-                          const std::vector<std::string>& headers) {
+HttpResponse RestClient::Post(const std::string_view path, const std::string_view body,
+                              const std::vector<std::string>& headers) {
     curl_easy_reset(handle_.get());
     curl_easy_setopt(handle_.get(), CURLOPT_POST, 1L);
     // std::string_view::data can be the window of the middle of a string, which wouldn't
@@ -63,14 +63,15 @@ Response RestClient::Post(const std::string_view path, const std::string_view bo
     return Perform(path, headers);
 }
 
-Response RestClient::Perform(const std::string_view path, const std::vector<std::string>& headers) {
+HttpResponse RestClient::Perform(const std::string_view path,
+                                 const std::vector<std::string>& headers) {
     const std::string url = base_url_ + std::string(path);
     curl_easy_setopt(handle_.get(), CURLOPT_URL, url.c_str());
     curl_easy_setopt(handle_.get(), CURLOPT_TIMEOUT_MS, kTimeoutMs);
     curl_easy_setopt(handle_.get(), CURLOPT_CONNECTTIMEOUT_MS, kConnectTimeoutMs);
 
     // response.body is what WriteCallback appends into as data streams in
-    Response response;
+    HttpResponse response;
     curl_easy_setopt(handle_.get(), CURLOPT_WRITEFUNCTION, WriteCallback);
     curl_easy_setopt(handle_.get(), CURLOPT_WRITEDATA, &response.body);
 
