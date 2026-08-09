@@ -4,9 +4,7 @@
 #include <openssl/evp.h>
 #include <openssl/params.h>
 
-#include <algorithm>
 #include <array>
-#include <cctype>
 #include <chrono>
 #include <format>
 #include <stdexcept>
@@ -74,6 +72,12 @@ std::string Base64Encode(const std::vector<unsigned char>& data) {
     encoded.resize(static_cast<std::size_t>(len));
     return encoded;
 }
+
+constexpr std::array<std::string_view, 2> kHttpMethodNames = {"GET", "POST"};
+
+std::string_view ToString(HttpMethod method) {
+    return kHttpMethodNames.at(static_cast<std::size_t>(method));
+}
 }  // namespace
 
 std::string HmacSha256Base64(std::string_view message, std::string_view secret) {
@@ -85,17 +89,12 @@ OkxAuth::OkxAuth(std::string api_key, std::string api_secret, std::string passph
       api_secret_(std::move(api_secret)),
       passphrase_(std::move(passphrase)) {}
 
-std::vector<std::string> OkxAuth::SignHeaders(std::string_view method,
-                                              std::string_view request_path,
+std::vector<std::string> OkxAuth::SignHeaders(HttpMethod method, std::string_view request_path,
                                               std::string_view body) const {
     const std::string timestamp = IsoTimestampNow();
 
-    std::string method_upper(method);
-    std::ranges::transform(method_upper, method_upper.begin(),
-                           [](unsigned char c) { return std::toupper(c); });
-
     const std::string prehash =
-        timestamp + method_upper + std::string(request_path) + std::string(body);
+        timestamp + std::string(ToString(method)) + std::string(request_path) + std::string(body);
     const std::string signature = HmacSha256Base64(prehash, api_secret_);
 
     return {

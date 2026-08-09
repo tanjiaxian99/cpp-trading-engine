@@ -201,10 +201,10 @@ sign    = base64( HMAC_SHA256(prehash, secret) )
 - [x] Targeted JSON field scanner — locate key, extract number/string in place, no DOM — **2 h**
 - [x] Instrument specs from `GET /api/v5/public/instruments?instType=SPOT`:
       `tickSz`, `lotSz`, `minSz` — **1.5 h**
-- [ ] `POST /api/v5/trade/order` — `instId`, `tdMode: "cash"`, `side`, `ordType`, `px`,
+- [x] `POST /api/v5/trade/order` — `instId`, `tdMode: "cash"`, `side`, `ordType`, `px`,
       `sz`, `clOrdId` — **2 h**
-- [ ] `POST /api/v5/trade/cancel-order`, `GET /api/v5/trade/orders-pending` — **1 h**
-- [ ] Two-level response envelope handling — **1 h**
+- [x] `POST /api/v5/trade/cancel-order`, `GET /api/v5/trade/orders-pending` — **1 h**
+- [x] Two-level response envelope handling — **1 h**
 
 > **Two non-obvious failure modes.**
 >

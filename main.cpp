@@ -9,6 +9,8 @@
 #include "config.hpp"
 #include "instrument.hpp"
 #include "json.hpp"
+#include "okx_constants.hpp"
+#include "orders.hpp"
 #include "rest_client.hpp"
 #include "transport.hpp"
 
@@ -18,11 +20,11 @@ namespace {
 // general-purpose scanner (json::FindArrayElement + json::FindString)
 // rather than a one-off ad-hoc lookup.
 long long ExtractTimestampMs(const std::string& public_time_body) {
-    const auto data0 = json::FindArrayElement(public_time_body, "data", 0);
-    if (!data0) {
+    const auto data = json::FindArrayElement(public_time_body, kData, 0);
+    if (!data) {
         throw std::runtime_error("could not find data[0] in /public/time response");
     }
-    const auto ts = json::FindString(*data0, "ts");
+    const auto ts = json::FindString(*data, kTs);
     if (!ts) {
         throw std::runtime_error("could not find ts field in /public/time response");
     }
@@ -50,10 +52,11 @@ int main() {
         std::cout << "clock drift: " << (local_time_ms - server_time_ms) << " ms\n";
 
         // Signed request — proves the A3 auth/signing path end-to-end.
+        using enum HttpMethod;
         const OkxAuth auth(config.api_key, config.api_secret, config.passphrase);
         const std::string balance_path = "/api/v5/account/balance";
         const HttpResponse balance_response =
-            rest_client.Get(balance_path, auth.SignHeaders("GET", balance_path));
+            rest_client.Get(balance_path, auth.SignHeaders(kGet, balance_path));
         std::cout << "balance status " << balance_response.status_code << ": "
                   << balance_response.body << "\n";
 
@@ -62,6 +65,26 @@ int main() {
         const InstrumentSpec spec = FetchInstrumentSpec(rest_client, "BTC-USDT");
         std::cout << "BTC-USDT: tickSz=" << spec.tick_sz << " lotSz=" << spec.lot_sz
                   << " minSz=" << spec.min_sz << "\n";
+
+        const OrderRequest order_request{
+            .inst_id = "ETH-USDT",
+            .side = std::string(kBuy),
+            .ord_type = std::string(kLimit),
+            .px = "100",
+            .sz = "0.01",
+        };
+        const OrderResult place_result = PlaceOrder(rest_client, auth, order_request);
+        std::cout << "place order: accepted=" << place_result.accepted
+                  << " ordId=" << place_result.ord_id << " sCode=" << place_result.s_code
+                  << " sMsg=" << place_result.s_msg << "\n";
+
+        if (place_result.accepted) {
+            const OrderResult cancel_result =
+                CancelOrder(rest_client, auth, order_request.inst_id, place_result.ord_id);
+            std::cout << "cancel order: accepted=" << cancel_result.accepted
+                      << " sCode=" << cancel_result.s_code << " sMsg=" << cancel_result.s_msg
+                      << "\n";
+        }
 
         Transport transport("wspap.okx.com", "8443");
         transport.Connect();

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -9,11 +10,16 @@
 std::string IsoTimestampNow();
 std::string HmacSha256Base64(std::string_view message, std::string_view secret);
 
+enum class HttpMethod : std::uint8_t {
+    kGet,
+    kPost,
+};
+
 class OkxAuth {
 public:
     OkxAuth(std::string api_key, std::string api_secret, std::string passphrase);
 
-    [[nodiscard]] std::vector<std::string> SignHeaders(std::string_view method,
+    [[nodiscard]] std::vector<std::string> SignHeaders(HttpMethod method,
                                                        std::string_view request_path,
                                                        std::string_view body = "") const;
 
