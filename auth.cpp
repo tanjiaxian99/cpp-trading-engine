@@ -28,7 +28,7 @@ namespace {
 constexpr const char* kHmacAlgorithm = "HMAC";
 
 // OSSL_PARAM_construct_utf8_string wants a non-const buffer
-char sha256_digest_name[] = "SHA256"; // NOLINT(modernize-avoid-c-arrays)
+char sha256_digest_name[] = "SHA256";  // NOLINT(modernize-avoid-c-arrays)
 
 std::vector<unsigned char> HmacSha256(std::string_view message, std::string_view secret) {
     EVP_MAC* mac = EVP_MAC_fetch(nullptr, kHmacAlgorithm, nullptr);
@@ -37,7 +37,7 @@ std::vector<unsigned char> HmacSha256(std::string_view message, std::string_view
     }
 
     EVP_MAC_CTX* ctx = EVP_MAC_CTX_new(mac);
-    EVP_MAC_free(mac); // ctx has its own reference to mac so we can release mac
+    EVP_MAC_free(mac);  // ctx has its own reference to mac so we can release mac
     if (ctx == nullptr) {
         throw std::runtime_error("failed to create HMAC context");
     }
@@ -74,7 +74,7 @@ std::string Base64Encode(const std::vector<unsigned char>& data) {
     encoded.resize(static_cast<std::size_t>(len));
     return encoded;
 }
-} // namespace
+}  // namespace
 
 std::string HmacSha256Base64(std::string_view message, std::string_view secret) {
     return Base64Encode(HmacSha256(message, secret));
@@ -83,8 +83,7 @@ std::string HmacSha256Base64(std::string_view message, std::string_view secret) 
 OkxAuth::OkxAuth(std::string api_key, std::string api_secret, std::string passphrase)
     : api_key_(std::move(api_key)),
       api_secret_(std::move(api_secret)),
-      passphrase_(std::move(passphrase)) {
-}
+      passphrase_(std::move(passphrase)) {}
 
 std::vector<std::string> OkxAuth::SignHeaders(std::string_view method,
                                               std::string_view request_path,
@@ -93,17 +92,15 @@ std::vector<std::string> OkxAuth::SignHeaders(std::string_view method,
 
     std::string method_upper(method);
     std::ranges::transform(method_upper, method_upper.begin(),
-                           [](unsigned char c) {
-                               return std::toupper(c);
-                           });
+                           [](unsigned char c) { return std::toupper(c); });
 
     const std::string prehash =
         timestamp + method_upper + std::string(request_path) + std::string(body);
     const std::string signature = HmacSha256Base64(prehash, api_secret_);
 
     return {
-        "OK-ACCESS-KEY: " + api_key_, "OK-ACCESS-SIGN: " + signature,
+        "OK-ACCESS-KEY: " + api_key_,        "OK-ACCESS-SIGN: " + signature,
         "OK-ACCESS-TIMESTAMP: " + timestamp, "OK-ACCESS-PASSPHRASE: " + passphrase_,
-        "Content-Type: application/json", "x-simulated-trading: 1",
+        "Content-Type: application/json",    "x-simulated-trading: 1",
     };
 }

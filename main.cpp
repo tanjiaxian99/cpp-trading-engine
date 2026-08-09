@@ -7,28 +7,26 @@
 
 #include "auth.hpp"
 #include "config.hpp"
+#include "json.hpp"
 #include "rest_client.hpp"
 #include "transport.hpp"
 
 namespace {
 
-// Extracts just the "ts" field from /public/time's known response shape:
-// {"code":"0","data":[{"ts":"1786204129995"}],"msg":""}. Deliberately not
-// a general JSON parser — A4 introduces the real targeted field scanner
-// for arbitrary responses; this is a one-off stopgap scoped to exactly
-// this endpoint, not something meant to be reused.
+// Extracts the server timestamp from /public/time's response, e.g.
+// {"code":"0","data":[{"ts":"1786204129995"}],"msg":""}, using the
+// general-purpose scanner (json::FindArrayElement + json::FindString)
+// rather than a one-off ad-hoc lookup.
 long long ExtractTimestampMs(const std::string& public_time_body) {
-    const std::string key = R"("ts":")";
-    const auto value_start = public_time_body.find(key);
-    if (value_start == std::string::npos) {
+    const auto data0 = json::FindArrayElement(public_time_body, "data", 0);
+    if (!data0) {
+        throw std::runtime_error("could not find data[0] in /public/time response");
+    }
+    const auto ts = json::FindString(*data0, "ts");
+    if (!ts) {
         throw std::runtime_error("could not find ts field in /public/time response");
     }
-    const auto digits_start = value_start + key.size();
-    const auto digits_end = public_time_body.find('"', digits_start);
-    if (digits_end == std::string::npos) {
-        throw std::runtime_error("malformed ts field in /public/time response");
-    }
-    return std::stoll(public_time_body.substr(digits_start, digits_end - digits_start));
+    return std::stoll(std::string(*ts));
 }
 
 }  // namespace
