@@ -35,7 +35,7 @@ specific to exchange connectivity and market data itself.
 | **Receive buffering, in-place parsing** | In-tree — decode off the read buffer, no DOM |
 | **Order books, sequencing, gap recovery** | In-tree — pre-allocated, zero hot-path allocation |
 | **Order lifecycle, reconciliation, risk** | In-tree |
-| **Arenas, slabs, SPSC ring, measurement** | In-tree |
+| **Slabs, ring buffers, SPSC queue, measurement** | In-tree |
 
 Two deliberate choices worth stating:
 
@@ -124,7 +124,7 @@ Rules the implementation holds itself to:
 
 1. **No protocol library.** No Beast, no websocketpp, no exchange SDK.
 2. **Demo trading only** until the kill switch works — see *Safety*.
-3. **No allocation on the hot path.** Arenas and slabs, sized up front.
+3. **No allocation on the hot path.** Fixed-capacity buffers and slabs, sized up front.
 4. **No number is recorded until it has been measured**, with its boundary written next to it.
 5. **Percentiles, never averages.**
 
@@ -218,7 +218,6 @@ sign    = base64( HMAC_SHA256(prehash, secret) )
 ### Definition of done
 
 - Places a limit order that rests, then cancels it.
-- Places a marketable order that fills, and reads the fill back via REST.
 - Rejects a malformed order locally (bad `tickSz` / below `minSz`) before sending it.
 - Refuses to send at all if `x-simulated-trading` is absent.
 - Runs clean under ASan and UBSan.
@@ -227,15 +226,16 @@ sign    = base64( HMAC_SHA256(prehash, secret) )
 
 # Milestone B — Live order lifecycle
 
-**~37–54 hours.** End state: an async engine holding two WebSocket connections
-(`wspap.okx.com:8443` — public and private), running a naive quoting strategy that survives
-disconnects, with risk limits and a kill switch.
+**~43–62 hours.** End state: an async engine holding two WebSocket connections
+(`wspap.okx.com:8443` — public and private), placing orders over the authenticated private
+connection, running a naive quoting strategy that survives disconnects, with risk limits and a
+kill switch.
 
 ### B1 · WebSocket codec — 8–12 h
 
 Written from RFC 6455.
 
-- [ ] Fixed-capacity RX/TX ring buffers behind Asio's read/write, engine-owned so parsing can
+- [x] Fixed-capacity RX/TX ring buffers behind Asio's read/write, engine-owned so parsing can
       happen in place off them — **1 h**
 - [ ] Handshake: random `Sec-WebSocket-Key`, base64, verify `Sec-WebSocket-Accept` — **2 h**
 - [ ] Frame decoder: FIN/opcode, 7 / 16 / 64-bit payload lengths — **3.5 h**
@@ -243,7 +243,9 @@ Written from RFC 6455.
 - [ ] Control frames: ping/pong, close handshake — **1.5 h**
 - [ ] OKX application-level heartbeat: send the literal text `ping`, expect `pong`.
       The connection drops after 30 s of silence, so run a <30 s timer — **0.5 h**
-- [ ] Continuation-frame reassembly into an arena buffer — **1.5 h**
+- [ ] Continuation-frame reassembly into a fixed-capacity per-connection buffer, sized for the
+      largest expected message; a message that overflows it closes the connection rather than
+      falling back to the heap — **1.5 h**
 - [ ] Drive the codec from Asio completion handlers; reconnect with exponential backoff
       + jitter via `asio::steady_timer` — **1.5 h**
 
@@ -287,7 +289,27 @@ polled or keepalive-maintained REST token.
 > auth is the single most common OKX integration bug. Write both signers side by side in one
 > file with a comment explaining the difference.
 
-### B4 · Order lifecycle — 6–8 h
+### B4 · Order entry over the private WebSocket — 6–8 h
+
+Orders go out on the session authenticated in B3. REST stays for cold-path work only — startup,
+reconciliation, cancel-all — which is what the Design table already claims it is for.
+
+- [ ] `op: "order"` request framing, `id` field generated and correlated to `clOrdId` — **2 h**
+- [ ] `op: "cancel-order"`, `op: "amend-order"`; `batch-orders` for multi-leg requotes — **1.5 h**
+- [ ] Response demux: match the ack's `id` back to the originating order, route to the
+      state machine — **1.5 h**
+- [ ] TX path: encode into the engine-owned TX ring, mask, one `write()` — **1 h**
+- [ ] REST fallback when the private socket is down, behind the same risk checks — **1 h**
+
+> This is what makes the tick-to-trade boundary honest. Over libcurl the send is a blocking
+> `curl_easy_perform` sitting at the end of the execution loop, so a sub-millisecond number
+> measured up to `write()` would be quietly excluding the slowest part of the path. Reusing the
+> authenticated session removes the TLS handshake, HTTP framing and per-order signing entirely.
+>
+> The two-level envelope check from A4 applies identically here: a WS ack carries per-item
+> `sCode`/`sMsg`, and both levels must be checked before treating an order as live.
+
+### B5 · Order lifecycle — 6–8 h
 
 - [ ] State machine: `PendingNew → New → PartiallyFilled → Filled | Canceled | Rejected`,
       plus `PendingCancel` / `PendingReplace` — **2.5 h**
@@ -296,13 +318,13 @@ polled or keepalive-maintained REST token.
 - [ ] Reconciliation: diff local state vs exchange, resolve divergence — **2 h**
 - [ ] Timeouts for unacknowledged orders — **1 h**
 
-### B5 · Risk — 3–4 h
+### B6 · Risk — 3–4 h
 
 - [ ] Pre-trade checks: max order size, max notional, price collar, max open orders — **1.5 h**
 - [ ] Position and PnL tracking — **1 h**
 - [ ] Kill switch: cancel-all + halt, triggered manually and automatically — **1.5 h**
 
-### B6 · Strategy — 5–8 h
+### B7 · Strategy — 5–8 h
 
 - [ ] Strategy interface: `on_book_update`, `on_fill`, `on_reject`, `on_timer` — **1 h**
 - [ ] Naive quoter: post bid/ask at ±k bps, requote when mid moves past a threshold — **3 h**
@@ -310,13 +332,13 @@ polled or keepalive-maintained REST token.
       per-endpoint requests-per-2s, not a global weight budget) — **2 h**
 - [ ] Run it live for several hours; fix everything that breaks — **2 h**
 
-### B7 · Observability — 3–4 h
+### B8 · Observability — 3–4 h
 
 - [ ] TSC timestamping + log-bucketed latency histogram — **2 h**
 - [ ] Async logger: SPSC ring → writer thread, zero I/O on the hot path — **2 h**
 - [ ] Tick-to-trade harness: wire arrival → order bytes handed to `write()` — **1 h**
 
-### B8 · Documentation — 2–3 h
+### B9 · Documentation — 2–3 h
 
 - [ ] Architecture diagram, measured latency table, run instructions — **2.5 h**
 
@@ -324,6 +346,8 @@ polled or keepalive-maintained REST token.
 
 - Runs unattended for 4+ hours, quoting and trading, surviving at least one forced disconnect
   (kill the socket by hand and watch it re-login, resubscribe and reconcile).
+- Orders are placed, amended and cancelled over the private WebSocket; REST is used only for
+  startup, reconciliation and cancel-all.
 - Local order state matches the exchange after every reconnect.
 - Kill switch cancels everything and halts within one second.
 - README contains a tick-to-trade table with p50/p99/p99.9/max and a stated measurement boundary.
@@ -362,11 +386,6 @@ order-by-order. Deterministic and large, so the benchmarks are reproducible.
 
 # Phase D — Optional upgrades
 
-- **Order entry over the private WebSocket** — `op: "order"`, `"batch-orders"`,
-  `"cancel-order"` on the already-authenticated private connection, instead of a fresh
-  signed REST request per order. Removes TLS handshake, HTTP framing and per-request signing
-  from the critical path. Highest-value item here — the largest single latency win available,
-  and it makes the WebSocket codec bidirectional. — **8 h**
 - Upgrade to `books-l2-tbt` / `books50-l2-tbt` (10 ms vs 100 ms) where permitted — **3 h**
 - Second venue behind the same gateway abstraction — **20 h**
 - Raw `kqueue` (macOS) or `epoll`/`io_uring` (Linux) transport behind the same `Transport`
@@ -381,13 +400,13 @@ order-by-order. Deterministic and large, so the benchmarks are reproducible.
 | Phase | Hours | At 10 h/week |
 |---|---|---|
 | A — first real order | 15–21 | 2 weeks |
-| B — live lifecycle | 37–54 | 4–5 weeks |
-| **A + B (first trading build)** | **52–75** | **6–8 weeks** |
+| B — live lifecycle | 43–62 | 4–6 weeks |
+| **A + B (first trading build)** | **58–83** | **6–8 weeks** |
 | C — order book work | 35–45 | 4 weeks |
 | D — upgrades | optional | — |
 
 The top of that range assumes every task independently hits its worst case, which does not
-happen in practice. Plan around **~60 hours** for A + B and treat 75 as the tail.
+happen in practice. Plan around **~68 hours** for A + B and treat 83 as the tail.
 
 ---
 
