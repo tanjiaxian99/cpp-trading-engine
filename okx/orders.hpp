@@ -3,8 +3,8 @@
 #include <string>
 #include <string_view>
 
-#include "auth.hpp"
-#include "rest_client.hpp"
+#include "okx/auth.hpp"
+#include "rest/rest_client.hpp"
 
 struct OrderRequest {
     std::string inst_id;

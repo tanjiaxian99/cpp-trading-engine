@@ -3,7 +3,7 @@
 #include <string>
 #include <string_view>
 
-#include "rest_client.hpp"
+#include "rest/rest_client.hpp"
 
 struct InstrumentSpec {
     std::string inst_id;

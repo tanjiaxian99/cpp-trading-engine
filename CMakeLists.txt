@@ -34,9 +34,17 @@ if (ENABLE_CLANG_TIDY)
             "--extra-arg=-resource-dir=${APPLE_CLANG_RESOURCE_DIR}")
 endif ()
 
-add_executable(trading_engine main.cpp config.hpp transport.hpp transport.cpp rest_client.hpp
-        rest_client.cpp auth.hpp auth.cpp json.hpp json.cpp instrument.hpp instrument.cpp
-        orders.hpp orders.cpp okx_constants.hpp ring_buffer.hpp)
+add_executable(trading_engine main.cpp config.hpp
+        net/transport.hpp net/transport.cpp net/ring_buffer.hpp
+        rest/rest_client.hpp rest/rest_client.cpp
+        okx/auth.hpp okx/auth.cpp okx/okx_constants.hpp
+        okx/instrument.hpp okx/instrument.cpp okx/orders.hpp okx/orders.cpp
+        util/json.hpp util/json.cpp)
+
+# Lets every file use root-relative includes (e.g. "okx/auth.hpp" from
+# main.cpp, or even from within okx/orders.cpp itself), regardless of
+# which directory the including file lives in.
+target_include_directories(trading_engine PRIVATE ${CMAKE_SOURCE_DIR})
 
 target_compile_options(trading_engine PRIVATE
         -Wall -Wextra -Wpedantic

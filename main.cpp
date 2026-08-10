@@ -5,14 +5,14 @@
 #include <stdexcept>
 #include <string>
 
-#include "auth.hpp"
 #include "config.hpp"
-#include "instrument.hpp"
-#include "json.hpp"
-#include "okx_constants.hpp"
-#include "orders.hpp"
-#include "rest_client.hpp"
-#include "transport.hpp"
+#include "net/transport.hpp"
+#include "okx/auth.hpp"
+#include "okx/instrument.hpp"
+#include "okx/okx_constants.hpp"
+#include "okx/orders.hpp"
+#include "rest/rest_client.hpp"
+#include "util/json.hpp"
 
 namespace {
 // Extracts the server timestamp from /public/time's response, e.g.

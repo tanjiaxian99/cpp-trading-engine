@@ -1,10 +1,10 @@
-#include "instrument.hpp"
+#include "okx/instrument.hpp"
 
 #include <format>
 #include <stdexcept>
 
-#include "json.hpp"
-#include "okx_constants.hpp"
+#include "okx/okx_constants.hpp"
+#include "util/json.hpp"
 
 constexpr std::string_view kInstrumentsPathFormat =
     "/api/v5/public/instruments?instType=SPOT&instId={}";

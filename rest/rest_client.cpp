@@ -1,4 +1,4 @@
-#include "rest_client.hpp"
+#include "rest/rest_client.hpp"
 
 #include <curl/curl.h>
 
