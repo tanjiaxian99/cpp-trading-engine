@@ -1,4 +1,3 @@
-#include <array>
 #include <chrono>
 #include <exception>
 #include <iostream>
@@ -7,6 +6,7 @@
 
 #include "config.hpp"
 #include "net/transport.hpp"
+#include "net/websocket_handshake.hpp"
 #include "okx/auth.hpp"
 #include "okx/instrument.hpp"
 #include "okx/okx_constants.hpp"
@@ -86,17 +86,13 @@ int main() {
                       << "\n";
         }
 
-        Transport transport("wspap.okx.com", "8443");
+        const std::string ws_host = "wspap.okx.com";
+        Transport transport(ws_host, "8443");
         transport.Connect();
-        std::cout << "TLS connected to wspap.okx.com:8443\n";
+        std::cout << "TLS connected to " << ws_host << ":8443\n";
 
-        // No WebSocket upgrade request has been sent yet (that's B1), so
-        // OKX has nothing to proactively respond to. This read only proves
-        // the transport layer works — it may block for a while before the
-        // far end drops the connection. That's expected here, not a bug.
-        std::array<char, 4096> buf{};
-        // const std::size_t n = transport.ReadSome(asio::buffer(buf));
-        // std::cout << "read " << n << " bytes\n";
+        PerformWebSocketHandshake(transport, ws_host, "/ws/v5/public");
+        std::cout << "WebSocket handshake complete\n";
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "fatal: " << e.what() << "\n";

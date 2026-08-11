@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include "util/base64.hpp"
+
 constexpr std::string_view kIsoTimestampFormat = "{:%Y-%m-%dT%H:%M:%S}Z";
 
 std::string IsoTimestampNow() {
@@ -61,16 +63,6 @@ std::vector<unsigned char> HmacSha256(std::string_view message, std::string_view
     }
     digest.resize(digest_len);
     return digest;
-}
-
-std::string Base64Encode(const std::vector<unsigned char>& data) {
-    // Base64 encoding takes 3 bytes and outputs 4 characters, i.e. ceil(n/3) * 4
-    // ceil(a/b) is calculated using (a + b - 1) / b
-    std::string encoded(4 * ((data.size() + 2) / 3), '\0');
-    const int len = EVP_EncodeBlock(reinterpret_cast<unsigned char*>(encoded.data()), data.data(),
-                                    static_cast<int>(data.size()));
-    encoded.resize(static_cast<std::size_t>(len));
-    return encoded;
 }
 
 constexpr std::array<std::string_view, 2> kHttpMethodNames = {"GET", "POST"};

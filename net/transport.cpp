@@ -45,3 +45,7 @@ void Transport::Connect() {
 std::size_t Transport::ReadSome(asio::mutable_buffer buffer) {
     return stream_.read_some(buffer);
 }
+
+void Transport::Write(std::string_view data) {
+    asio::write(stream_, asio::buffer(data));
+}

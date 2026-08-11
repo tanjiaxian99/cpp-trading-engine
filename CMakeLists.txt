@@ -36,10 +36,12 @@ endif ()
 
 add_executable(trading_engine main.cpp config.hpp
         net/transport.hpp net/transport.cpp net/ring_buffer.hpp
+        net/websocket_handshake.hpp net/websocket_handshake.cpp
         rest/rest_client.hpp rest/rest_client.cpp
         okx/auth.hpp okx/auth.cpp okx/okx_constants.hpp
         okx/instrument.hpp okx/instrument.cpp okx/orders.hpp okx/orders.cpp
-        util/json.hpp util/json.cpp)
+        util/json.hpp util/json.cpp util/base64.hpp util/base64.cpp
+        util/sha1.hpp util/sha1.cpp)
 
 # Lets every file use root-relative includes (e.g. "okx/auth.hpp" from
 # main.cpp, or even from within okx/orders.cpp itself), regardless of
