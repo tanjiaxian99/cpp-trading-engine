@@ -38,9 +38,11 @@ add_executable(trading_engine main.cpp config.hpp
         net/transport.hpp net/transport.cpp net/ring_buffer.hpp
         net/websocket_handshake.hpp net/websocket_handshake.cpp
         net/websocket_frame.hpp net/websocket_frame.cpp
+        net/websocket_control.hpp net/websocket_control.cpp
         rest/rest_client.hpp rest/rest_client.cpp
         okx/auth.hpp okx/auth.cpp okx/okx_constants.hpp
         okx/instrument.hpp okx/instrument.cpp okx/orders.hpp okx/orders.cpp
+        okx/heartbeat.hpp okx/heartbeat.cpp
         util/json.hpp util/json.cpp util/base64.hpp util/base64.cpp
         util/sha1.hpp util/sha1.cpp)
 

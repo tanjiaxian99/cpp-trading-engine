@@ -30,3 +30,7 @@ constexpr std::string_view kSell = "sell";
 constexpr std::string_view kLimit = "limit";
 constexpr std::string_view kMarket = "market";
 constexpr std::string_view kBaseCcy = "base_ccy";
+
+// WebSocket application-level heartbeat
+constexpr std::string_view kOkxPingText = "ping";
+constexpr std::string_view kOkxPongText = "pong";

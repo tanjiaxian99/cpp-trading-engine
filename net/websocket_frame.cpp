@@ -41,8 +41,8 @@ std::uint64_t ReadBigEndian64(std::string_view data, std::size_t offset) {
 }
 
 void AppendBigEndian16(std::string& out, std::uint16_t value) {
-    out.push_back(static_cast<char>(static_cast<std::uint8_t>(value >> 8)));
-    out.push_back(static_cast<char>(static_cast<std::uint8_t>(value)));
+    out.push_back(static_cast<char>(value >> 8));
+    out.push_back(static_cast<char>(value));
 }
 
 void AppendBigEndian64(std::string& out, std::uint64_t value) {
@@ -58,7 +58,7 @@ std::array<std::uint8_t, kMaskKeyBytes> GenerateMaskingKey() {
     }
     return key;
 }
-} // namespace
+}  // namespace
 
 std::optional<WebSocketFrameHeader> DecodeFrameHeader(std::string_view data) {
     if (data.size() < kBaseHeaderSize) {
