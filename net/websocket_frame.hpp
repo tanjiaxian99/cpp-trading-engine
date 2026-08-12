@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 
 enum class WebSocketOpcode : std::uint8_t {
@@ -26,7 +27,9 @@ struct WebSocketFrame {
     std::size_t total_size = 0;
 };
 
-std::optional<WebSocketFrameHeader> ParseFrameHeader(std::string_view data);
+std::optional<WebSocketFrameHeader> DecodeFrameHeader(std::string_view data);
 
 // The frame is a string_view into the data
-std::optional<WebSocketFrame> ParseFrame(std::string_view data);
+std::optional<WebSocketFrame> DecodeFrame(std::string_view data);
+
+std::string EncodeFrame(WebSocketOpcode opcode, std::string_view payload);

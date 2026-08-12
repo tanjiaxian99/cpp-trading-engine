@@ -1,5 +1,7 @@
 #include "net/websocket_frame.hpp"
 
+#include <openssl/rand.h>
+
 #include <array>
 #include <cstddef>
 #include <stdexcept>
@@ -15,6 +17,9 @@ constexpr std::uint8_t kExtended16Marker = 126;
 constexpr std::uint8_t kExtended64Marker = 127;
 constexpr std::size_t kExtended16Bytes = 2;
 constexpr std::size_t kExtended64Bytes = 8;
+constexpr std::size_t kMaskKeyBytes = 4;
+constexpr std::uint64_t kMaxBaseLength = 125;
+constexpr std::uint64_t kMaxExtended16Length = 0xFFFF;
 
 constexpr std::array kValidOpcodes = {
     true, true, true, false, false, false, false, false,
@@ -34,9 +39,28 @@ std::uint64_t ReadBigEndian64(std::string_view data, std::size_t offset) {
     }
     return value;
 }
+
+void AppendBigEndian16(std::string& out, std::uint16_t value) {
+    out.push_back(static_cast<char>(static_cast<std::uint8_t>(value >> 8)));
+    out.push_back(static_cast<char>(static_cast<std::uint8_t>(value)));
+}
+
+void AppendBigEndian64(std::string& out, std::uint64_t value) {
+    for (int shift = 48; shift >= 0; shift -= 16) {
+        AppendBigEndian16(out, static_cast<std::uint16_t>(value >> shift));
+    }
+}
+
+std::array<std::uint8_t, kMaskKeyBytes> GenerateMaskingKey() {
+    std::array<std::uint8_t, kMaskKeyBytes> key{};
+    if (RAND_bytes(key.data(), key.size()) != 1) {
+        throw std::runtime_error("failed to generate WebSocket frame masking key");
+    }
+    return key;
+}
 } // namespace
 
-std::optional<WebSocketFrameHeader> ParseFrameHeader(std::string_view data) {
+std::optional<WebSocketFrameHeader> DecodeFrameHeader(std::string_view data) {
     if (data.size() < kBaseHeaderSize) {
         return std::nullopt;
     }
@@ -82,8 +106,8 @@ std::optional<WebSocketFrameHeader> ParseFrameHeader(std::string_view data) {
     };
 }
 
-std::optional<WebSocketFrame> ParseFrame(std::string_view data) {
-    const auto header = ParseFrameHeader(data);
+std::optional<WebSocketFrame> DecodeFrame(std::string_view data) {
+    const auto header = DecodeFrameHeader(data);
     if (!header) {
         return std::nullopt;
     }
@@ -99,4 +123,33 @@ std::optional<WebSocketFrame> ParseFrame(std::string_view data) {
         .payload = data.substr(header->header_size, payload_length),
         .total_size = total_size,
     };
+}
+
+std::string EncodeFrame(WebSocketOpcode opcode, std::string_view payload) {
+    std::string frame;
+
+    frame.push_back(static_cast<char>(kFinBit | static_cast<std::uint8_t>(opcode)));
+
+    const std::uint64_t payload_length = payload.size();
+    if (payload_length <= kMaxBaseLength) {
+        frame.push_back(static_cast<char>(kMaskBit | static_cast<std::uint8_t>(payload_length)));
+    } else if (payload_length <= kMaxExtended16Length) {
+        frame.push_back(static_cast<char>(kMaskBit | kExtended16Marker));
+        AppendBigEndian16(frame, static_cast<std::uint16_t>(payload_length));
+    } else {
+        frame.push_back(static_cast<char>(kMaskBit | kExtended64Marker));
+        AppendBigEndian64(frame, payload_length);
+    }
+
+    const auto mask_key = GenerateMaskingKey();
+    for (const std::uint8_t key_byte : mask_key) {
+        frame.push_back(static_cast<char>(key_byte));
+    }
+
+    for (std::size_t i = 0; i < payload.size(); i++) {
+        const auto original = static_cast<std::uint8_t>(payload[i]);
+        frame.push_back(static_cast<char>(original ^ mask_key[i % kMaskKeyBytes]));
+    }
+
+    return frame;
 }

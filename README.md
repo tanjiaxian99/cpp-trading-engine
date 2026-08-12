@@ -239,7 +239,7 @@ Written from RFC 6455.
       happen in place off them — **1 h**
 - [x] Handshake: random `Sec-WebSocket-Key`, base64, verify `Sec-WebSocket-Accept` — **2 h**
 - [x] Frame decoder: FIN/opcode, 7 / 16 / 64-bit payload lengths — **3.5 h**
-- [ ] Frame encoder with mandatory client-side masking — **1.5 h**
+- [x] Frame encoder with mandatory client-side masking — **1.5 h**
 - [ ] Control frames: ping/pong, close handshake — **1.5 h**
 - [ ] OKX application-level heartbeat: send the literal text `ping`, expect `pong`.
       The connection drops after 30 s of silence, so run a <30 s timer — **0.5 h**
