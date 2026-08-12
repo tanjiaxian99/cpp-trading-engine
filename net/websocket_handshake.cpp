@@ -54,9 +54,7 @@ std::string ComputeExpectedAccept(std::string_view key) {
 std::string ToLower(std::string_view text) {
     std::string lower(text);
     std::ranges::transform(lower, lower.begin(),
-                           [](unsigned char c) {
-                               return static_cast<char>(std::tolower(c));
-                           });
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return lower;
 }
 
@@ -76,7 +74,7 @@ std::optional<std::string_view> FindHeader(std::string_view response, std::strin
         const std::size_t line_end = response.find(kCrLf, pos);
         const std::string_view line = response.substr(pos, line_end - pos);
         if (line.empty()) {
-            break; // The blank line ending the headers
+            break;  // The blank line ending the headers
         }
 
         const std::size_t colon = line.find(kColon);
@@ -92,7 +90,7 @@ std::optional<std::string_view> FindHeader(std::string_view response, std::strin
     }
     return std::nullopt;
 }
-} // namespace
+}  // namespace
 
 void PerformWebSocketHandshake(Transport& transport, std::string_view host, std::string_view path) {
     const std::string key = GenerateWebSocketKey();
