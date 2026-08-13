@@ -246,12 +246,20 @@ Written from RFC 6455.
 - [x] Continuation-frame reassembly into a fixed-capacity per-connection buffer, sized for the
       largest expected message; a message that overflows it closes the connection rather than
       falling back to the heap — **1.5 h**
-- [ ] Drive the codec from Asio completion handlers; reconnect with exponential backoff
+- [x] Drive the codec from Asio completion handlers; reconnect with exponential backoff
       + jitter via `asio::steady_timer` — **1.5 h**
 
 > OKX's heartbeat is a *text frame containing the word* `ping`, distinct from the RFC 6455
 > ping opcode. Both are required — the protocol-level control frames and the application-level
 > string. Implementing only one results in a disconnect every 30 seconds.
+
+> `ws_client.cpp`'s RX path still uses `std::string` + `erase(0, n)` per decoded frame — an
+> O(bytes remaining) memmove, bounded per read (`kReadChunkSize`) but repeated per frame. The
+> first checklist item above describes swapping it for the already-built `RingBuffer<N>`
+> (`net/ring_buffer.hpp`, unused since A1), which would make consumption O(1); the blocker is
+> handling a frame that straddles the ring's wrap point, since `ReadableRegion()` only exposes
+> the contiguous run and needs an explicit linearize-on-demand path to stay correct. Deferred
+> to a later B-milestone optimization pass rather than reopening B1.
 
 ### B2 · Market data — 5–8 h
 

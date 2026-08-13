@@ -5,8 +5,9 @@
 #include <stdexcept>
 #include <utility>
 
-Transport::Transport(std::string host, std::string port)
-    : host_(std::move(host)),
+Transport::Transport(asio::io_context& io_context, std::string host, std::string port)
+    : io_context_(io_context),
+      host_(std::move(host)),
       port_(std::move(port)),
       ssl_context_(asio::ssl::context::tlsv12_client),
       // The stream wraps a plain tcp::socket with a TLS layer on top.
@@ -48,4 +49,16 @@ std::size_t Transport::ReadSome(asio::mutable_buffer buffer) {
 
 void Transport::Write(std::string_view data) {
     asio::write(stream_, asio::buffer(data));
+}
+
+void Transport::AsyncReadSome(
+    asio::mutable_buffer buffer,
+    std::function<void(const boost::system::error_code&, std::size_t)> handler) {
+    stream_.async_read_some(buffer, std::move(handler));
+}
+
+void Transport::AsyncWrite(
+    asio::const_buffer buffer,
+    std::function<void(const boost::system::error_code&, std::size_t)> handler) {
+    asio::async_write(stream_, buffer, std::move(handler));
 }

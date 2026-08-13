@@ -43,7 +43,7 @@ add_executable(trading_engine main.cpp config.hpp
         rest/rest_client.hpp rest/rest_client.cpp
         okx/auth.hpp okx/auth.cpp okx/okx_constants.hpp
         okx/instrument.hpp okx/instrument.cpp okx/orders.hpp okx/orders.cpp
-        okx/heartbeat.hpp okx/heartbeat.cpp
+        okx/heartbeat.hpp okx/heartbeat.cpp okx/ws_client.hpp okx/ws_client.cpp
         util/json.hpp util/json.cpp util/base64.hpp util/base64.cpp
         util/sha1.hpp util/sha1.cpp)
 

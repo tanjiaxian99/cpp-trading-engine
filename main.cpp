@@ -1,4 +1,5 @@
-#include <array>
+#include <boost/asio.hpp>
+
 #include <chrono>
 #include <exception>
 #include <iostream>
@@ -6,14 +7,11 @@
 #include <string>
 
 #include "config.hpp"
-#include "net/transport.hpp"
-#include "net/websocket_frame.hpp"
-#include "net/websocket_handshake.hpp"
 #include "okx/auth.hpp"
-#include "okx/heartbeat.hpp"
 #include "okx/instrument.hpp"
 #include "okx/okx_constants.hpp"
 #include "okx/orders.hpp"
+#include "okx/ws_client.hpp"
 #include "rest/rest_client.hpp"
 #include "util/json.hpp"
 
@@ -32,21 +30,6 @@ long long ExtractTimestampMs(const std::string& public_time_body) {
         throw std::runtime_error("could not find ts field in /public/time response");
     }
     return std::stoll(std::string(*ts));
-}
-
-// Blocks, accumulating bytes into `buffer`, until a full frame is available.
-// `buffer` is owned by the caller so the returned frame's payload (a view
-// into it) stays valid after this returns. Standalone smoke-test plumbing —
-// driving the codec from Asio completion handlers is a later B1 step.
-WebSocketFrame ReadOneFrame(Transport& transport, std::string& buffer) {
-    std::array<char, 4096> chunk{};
-    while (true) {
-        if (const auto frame = DecodeFrame(buffer)) {
-            return *frame;
-        }
-        const std::size_t n = transport.ReadSome(asio::buffer(chunk));
-        buffer.append(chunk.data(), n);
-    }
 }
 }  // namespace
 
@@ -104,40 +87,20 @@ int main() {
                       << "\n";
         }
 
-        const std::string ws_host = "wspap.okx.com";
-        Transport transport(ws_host, "8443");
-        transport.Connect();
-        std::cout << "TLS connected to " << ws_host << ":8443\n";
-
-        PerformWebSocketHandshake(transport, ws_host, "/ws/v5/public");
-        std::cout << "WebSocket handshake complete\n";
+        asio::io_context io_context;
+        OkxWsClient ws_client(io_context, "wspap.okx.com", "8443", "/ws/v5/public");
 
         const std::string subscribe_msg =
             R"({"op":"subscribe","args":[{"channel":"tickers","instId":"BTC-USDT"}]})";
-        transport.Write(EncodeFrame(WebSocketOpcode::kText, subscribe_msg));
-        std::cout << "sent subscribe request\n";
+        ws_client.SetOnConnected([&ws_client, &subscribe_msg]() {
+            ws_client.Send(subscribe_msg);
+            std::cout << "sent subscribe request\n";
+        });
+        ws_client.SetOnMessage(
+            [](std::string_view message) { std::cout << "WS message: " << message << "\n"; });
 
-        std::string rx_buffer;
-        const WebSocketFrame frame = ReadOneFrame(transport, rx_buffer);
-        std::cout << "received WS frame: opcode=" << static_cast<int>(frame.header.opcode)
-                  << " fin=" << frame.header.fin << " payload=" << frame.payload << "\n";
-        rx_buffer.erase(0, frame.total_size);
-
-        transport.Write(EncodeOkxPing());
-        std::cout << "sent OKX heartbeat ping\n";
-
-        // The tickers channel keeps streaming updates, so the pong may be
-        // preceded by unrelated market-data frames — drain frames until it
-        // shows up rather than assuming it's the very next one.
-        bool got_pong = false;
-        for (int attempt = 0; attempt < 20 && !got_pong; attempt++) {
-            const WebSocketFrame next_frame = ReadOneFrame(transport, rx_buffer);
-            got_pong = IsOkxPong(next_frame);
-            std::cout << "received WS frame: opcode=" << static_cast<int>(next_frame.header.opcode)
-                      << " payload=" << next_frame.payload << "\n";
-            rx_buffer.erase(0, next_frame.total_size);
-        }
-        std::cout << "OKX heartbeat pong received=" << got_pong << "\n";
+        ws_client.Start();
+        io_context.run();
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "fatal: " << e.what() << "\n";
