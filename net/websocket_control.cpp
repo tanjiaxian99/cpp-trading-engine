@@ -11,7 +11,7 @@ void ValidateControlPayloadSize(std::size_t size) {
         throw std::invalid_argument("WebSocket control frame payload exceeds 125-byte limit");
     }
 }
-} // namespace
+}  // namespace
 
 std::string EncodeClose(std::uint16_t status_code, std::string_view reason) {
     ValidateControlPayloadSize(kCloseStatusCodeBytes + reason.size());

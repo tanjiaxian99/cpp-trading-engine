@@ -243,7 +243,7 @@ Written from RFC 6455.
 - [x] Control frames: ping/pong, close handshake — **1.5 h**
 - [x] OKX application-level heartbeat: send the literal text `ping`, expect `pong`.
       The connection drops after 30 s of silence, so run a <30 s timer — **0.5 h**
-- [ ] Continuation-frame reassembly into a fixed-capacity per-connection buffer, sized for the
+- [x] Continuation-frame reassembly into a fixed-capacity per-connection buffer, sized for the
       largest expected message; a message that overflows it closes the connection rather than
       falling back to the heap — **1.5 h**
 - [ ] Drive the codec from Asio completion handlers; reconnect with exponential backoff
