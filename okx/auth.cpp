@@ -33,13 +33,13 @@ char sha256_digest_name[] = "SHA256";  // NOLINT(modernize-avoid-c-arrays)
 std::vector<unsigned char> HmacSha256(std::string_view message, std::string_view secret) {
     EVP_MAC* mac = EVP_MAC_fetch(nullptr, kHmacAlgorithm, nullptr);
     if (mac == nullptr) {
-        throw std::runtime_error("failed to fetch HMAC implementation");
+        throw std::runtime_error("Failed to fetch HMAC implementation");
     }
 
     EVP_MAC_CTX* ctx = EVP_MAC_CTX_new(mac);
     EVP_MAC_free(mac);  // ctx has its own reference to mac so we can release mac
     if (ctx == nullptr) {
-        throw std::runtime_error("failed to create HMAC context");
+        throw std::runtime_error("Failed to create HMAC context");
     }
 
     std::array params = {

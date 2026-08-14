@@ -54,7 +54,7 @@ void AppendBigEndian64(std::string& out, std::uint64_t value) {
 std::array<std::uint8_t, kMaskKeyBytes> GenerateMaskingKey() {
     std::array<std::uint8_t, kMaskKeyBytes> key{};
     if (RAND_bytes(key.data(), key.size()) != 1) {
-        throw std::runtime_error("failed to generate WebSocket frame masking key");
+        throw std::runtime_error("Failed to generate WebSocket frame masking key");
     }
     return key;
 }

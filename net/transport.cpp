@@ -31,7 +31,7 @@ void Transport::Connect() {
 
     // SNI is used to tell the TLS server which hostname we're asking for.
     if (SSL_set_tlsext_host_name(stream_.native_handle(), host_.c_str()) == 0) {
-        throw std::runtime_error("failed to set SNI hostname");
+        throw std::runtime_error("Failed to set SNI hostname");
     }
 
     // Verify certificate-chain up to the trusted CAs loaded by set_default_verify_paths().

@@ -59,7 +59,7 @@ OrderResult ParseOrderResult(const HttpResponse& response) {
 
 OrderResult PlaceOrder(RestClient& rest_client, const OkxAuth& auth, const OrderRequest& request) {
     if (request.ord_type == kMarket) {
-        throw std::invalid_argument("market orders are not yet supported");
+        throw std::invalid_argument("Market orders are not yet supported");
     }
 
     const std::string cl_ord_id = GenerateClOrdId();

@@ -41,7 +41,7 @@ RestClient::RestClient(std::string base_url) : base_url_(std::move(base_url)) {
     EnsureCurlGlobalInit();
     handle_.reset(curl_easy_init());
     if (handle_ == nullptr) {
-        throw std::runtime_error("failed to initialize curl handle");
+        throw std::runtime_error("Failed to initialize curl handle");
     }
 }
 
@@ -86,7 +86,7 @@ HttpResponse RestClient::Perform(const std::string_view path,
     if (const CURLcode result = curl_easy_perform(handle_.get()); result != CURLE_OK) {
         // The error is on the transport itself, e.g. DNS failure or connection refused,
         // it has nothing to do with the HTTP response
-        throw std::runtime_error(std::string("curl request failed: ") + curl_easy_strerror(result));
+        throw std::runtime_error(std::string("Curl request failed: ") + curl_easy_strerror(result));
     }
 
     long status_code = 0;  // libcurl requires a long for response code

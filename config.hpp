@@ -25,7 +25,7 @@ private:
     static std::string ReadRequired(const char* name) {
         const char* value = std::getenv(name);
         if (value == nullptr || value[0] == '\0') {
-            std::cerr << "missing required environment variable: " << name << "\n";
+            std::cerr << "Missing required environment variable: " << name << "\n";
             std::exit(1);
         }
         return {value};

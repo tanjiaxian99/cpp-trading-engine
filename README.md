@@ -127,6 +127,7 @@ Rules the implementation holds itself to:
 3. **No allocation on the hot path.** Fixed-capacity buffers and slabs, sized up front.
 4. **No number is recorded until it has been measured**, with its boundary written next to it.
 5. **Percentiles, never averages.**
+6. **Error messages start with a capital letter.**
 
 Hour estimates below are planning figures, not commitments.
 
@@ -263,8 +264,8 @@ Written from RFC 6455.
 
 ### B2 · Market data — 5–8 h
 
-- [ ] Subscribe to the `books` and `trades` channels on the public endpoint — **1 h**
-- [ ] Snapshot + incremental application, sequenced by `seqId` / `prevSeqId`
+- [x] Subscribe to the `books` and `trades` channels on the public endpoint — **1 h**
+- [x] Snapshot + incremental application, sequenced by `seqId` / `prevSeqId`
       (`prevSeqId` is `-1` on the initial snapshot) — **2.5 h**
 - [ ] Pre-allocated L2 book: fixed-size sorted arrays, zero allocation on update — **2.5 h**
 - [ ] Gap detection (`prevSeqId` ≠ last `seqId`) → resubscribe for a fresh snapshot — **1 h**
@@ -278,6 +279,12 @@ Written from RFC 6455.
 > OKX has been **deprecating the `checksum` field** in favour of `seqId`/`prevSeqId`.
 > Sequencing is the primary path; checksum is a bonus where the channel still carries it.
 > Verify against the current docs before writing the CRC32 code.
+>
+> Confirmed against live traffic on `wspap.okx.com`: the `books` push carries no
+> `"action":"snapshot"/"update"` field at all — `prevSeqId == -1` is the *only* signal that a
+> push is the initial snapshot, exactly as this checklist already said. Also, each `[price,
+> size, ...]` level entry is a JSON array of **strings**, not bare numbers — quotes need
+> stripping before parsing.
 
 ### B3 · Private channel — 5–7 h
 

@@ -27,11 +27,11 @@ std::size_t SkipValue(std::string_view json, std::size_t pos) {
         pos++;
         while (pos < json.size() && json[pos] != '"') {
             if (json[pos] == '\\') {
-                pos++;  // Also skip the character the backslash escapes
+                pos++; // Also skip the character the backslash escapes
             }
             pos++;
         }
-        return pos + 1;  // Skip past the closing quote
+        return pos + 1; // Skip past the closing quote
     }
 
     if (json[pos] == '{' || json[pos] == '[') {
@@ -79,7 +79,34 @@ std::size_t FindValueStart(std::string_view json, std::string_view key) {
         search_from = key_pos + pattern.size();
     }
 }
-}  // namespace
+
+// Shared by FindArrayElement and FindElement: `array` starts at the array's
+// opening '[', and this walks past `index` elements to return the next one.
+std::optional<std::string_view> FindElementAt(std::string_view array, std::size_t index) {
+    std::size_t pos = 1;
+    for (std::size_t i = 0; i < index; i++) {
+        pos = SkipWhitespace(array, pos);
+        if (pos >= array.size() || array[pos] == ']') {
+            return std::nullopt;
+        }
+
+        pos = SkipValue(array, pos);
+        pos = SkipWhitespace(array, pos);
+        if (pos < array.size() && array[pos] == ',') {
+            pos++;
+        }
+    }
+
+    pos = SkipWhitespace(array, pos);
+    if (pos >= array.size() || array[pos] == ']') {
+        return std::nullopt;
+    }
+
+    const std::size_t element_start = pos;
+    const std::size_t element_end = SkipValue(array, pos);
+    return array.substr(element_start, element_end - element_start);
+}
+} // namespace
 
 std::optional<std::string_view> FindString(std::string_view json, std::string_view key) {
     const std::size_t value_start = FindValueStart(json, key);
@@ -128,27 +155,41 @@ std::optional<std::string_view> FindArrayElement(std::string_view json, std::str
         return std::nullopt;
     }
 
-    std::size_t pos = value_start + 1;
-    for (std::size_t i = 0; i < index; i++) {
-        pos = SkipWhitespace(json, pos);
-        if (pos >= json.size() || json[pos] == ']') {
-            return std::nullopt;
-        }
+    return FindElementAt(json.substr(value_start), index);
+}
 
-        pos = SkipValue(json, pos);
-        pos = SkipWhitespace(json, pos);
-        if (pos < json.size() && json[pos] == ',') {
-            pos++;
-        }
-    }
-
-    pos = SkipWhitespace(json, pos);
-    if (pos >= json.size() || json[pos] == ']') {
+std::optional<std::string_view> FindElement(std::string_view json_array, std::size_t index) {
+    if (json_array.empty() || json_array.front() != '[') {
         return std::nullopt;
     }
 
-    const std::size_t element_start = pos;
-    const std::size_t element_end = SkipValue(json, pos);
-    return json.substr(element_start, element_end - element_start);
+    return FindElementAt(json_array, index);
 }
-}  // namespace json
+
+void ForEachArrayElement(std::string_view json, std::string_view key,
+                         const std::function<void(std::string_view)>& action) {
+    const std::size_t value_start = FindValueStart(json, key);
+    if (value_start == std::string_view::npos || value_start >= json.size() ||
+        json[value_start] != '[') {
+        return;
+    }
+
+    const std::string_view array = json.substr(value_start);
+    std::size_t pos = 1; // Past the opening '['.
+    while (true) {
+        pos = SkipWhitespace(array, pos);
+        if (pos >= array.size() || array[pos] == ']') {
+            return;
+        }
+
+        const std::size_t element_start = pos;
+        pos = SkipValue(array, pos);
+        action(array.substr(element_start, pos - element_start));
+
+        pos = SkipWhitespace(array, pos);
+        if (pos < array.size() && array[pos] == ',') {
+            pos++;
+        }
+    }
+}
+} // namespace json

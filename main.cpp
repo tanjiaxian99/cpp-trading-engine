@@ -9,7 +9,9 @@
 #include "config.hpp"
 #include "okx/auth.hpp"
 #include "okx/instrument.hpp"
+#include "okx/market_data.hpp"
 #include "okx/okx_constants.hpp"
+#include "okx/order_book.hpp"
 #include "okx/orders.hpp"
 #include "okx/ws_client.hpp"
 #include "rest/rest_client.hpp"
@@ -23,11 +25,11 @@ namespace {
 long long ExtractTimestampMs(const std::string& public_time_body) {
     const auto data = json::FindArrayElement(public_time_body, kData, 0);
     if (!data) {
-        throw std::runtime_error("could not find data[0] in /public/time response");
+        throw std::runtime_error("Could not find data[0] in /public/time response");
     }
     const auto ts = json::FindString(*data, kTs);
     if (!ts) {
-        throw std::runtime_error("could not find ts field in /public/time response");
+        throw std::runtime_error("Could not find ts field in /public/time response");
     }
     return std::stoll(std::string(*ts));
 }
@@ -90,14 +92,24 @@ int main() {
         asio::io_context io_context;
         OkxWsClient ws_client(io_context, "wspap.okx.com", "8443", "/ws/v5/public");
 
+        OrderBook order_book;
+
         const std::string subscribe_msg =
-            R"({"op":"subscribe","args":[{"channel":"tickers","instId":"BTC-USDT"}]})";
+            R"({"op":"subscribe","args":)"
+            R"([{"channel":"books","instId":"BTC-USDT"},{"channel":"trades","instId":"BTC-USDT"}]})";
         ws_client.SetOnConnected([&ws_client, &subscribe_msg]() {
             ws_client.Send(subscribe_msg);
-            std::cout << "sent subscribe request\n";
+            std::cout << "sent books+trades subscribe request\n";
         });
-        ws_client.SetOnMessage(
-            [](std::string_view message) { std::cout << "WS message: " << message << "\n"; });
+        ws_client.SetOnMessage([&order_book](std::string_view message) {
+            if (ApplyBookMessage(message, order_book)) {
+                std::cout << "book: bid=" << order_book.BestBid().value_or(0.0)
+                          << " ask=" << order_book.BestAsk().value_or(0.0)
+                          << " seqId=" << order_book.LastSeqId() << "\n";
+            } else {
+                std::cout << "WS message: " << message << "\n";
+            }
+        });
 
         ws_client.Start();
         io_context.run();

@@ -41,7 +41,7 @@ constexpr std::string_view kHeaderTerminator = "\r\n\r\n";
 std::string GenerateWebSocketKey() {
     std::array<unsigned char, 16> nonce{};
     if (RAND_bytes(nonce.data(), nonce.size()) != 1) {
-        throw std::runtime_error("failed to generate random Sec-WebSocket-Key");
+        throw std::runtime_error("Failed to generate random Sec-WebSocket-Key");
     }
     return Base64Encode(std::vector(nonce.begin(), nonce.end()));
 }

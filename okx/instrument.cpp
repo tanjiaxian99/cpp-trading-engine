@@ -15,7 +15,7 @@ InstrumentSpec FetchInstrumentSpec(RestClient& rest_client, std::string_view ins
 
     const auto data = json::FindArrayElement(response.body, kData, 0);
     if (!data) {
-        throw std::runtime_error(std::format("instrument not found: {}", inst_id));
+        throw std::runtime_error(std::format("Instrument not found: {}", inst_id));
     }
     const std::string_view element = *data;
 
@@ -23,7 +23,7 @@ InstrumentSpec FetchInstrumentSpec(RestClient& rest_client, std::string_view ins
     const auto lot_sz = json::FindString(element, kLotSz);
     const auto min_sz = json::FindString(element, kMinSz);
     if (!tick_sz || !lot_sz || !min_sz) {
-        throw std::runtime_error(std::format("malformed instrument spec response for {}", inst_id));
+        throw std::runtime_error(std::format("Malformed instrument spec response for {}", inst_id));
     }
 
     return InstrumentSpec{

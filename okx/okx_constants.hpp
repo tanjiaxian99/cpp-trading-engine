@@ -34,3 +34,15 @@ constexpr std::string_view kBaseCcy = "base_ccy";
 // WebSocket application-level heartbeat
 constexpr std::string_view kOkxPingText = "ping";
 constexpr std::string_view kOkxPongText = "pong";
+
+// WebSocket public channel push messages
+constexpr std::string_view kChannel = "channel";
+constexpr std::string_view kBooksChannel = "books";
+constexpr std::string_view kTradesChannel = "trades";
+constexpr std::string_view kSeqId = "seqId";
+constexpr std::string_view kPrevSeqId = "prevSeqId";
+constexpr int kSnapshotSeqId = -1;
+constexpr std::string_view kAsks = "asks";
+constexpr std::string_view kBids = "bids";
+constexpr int kBooksLevelPriceIdx = 0;
+constexpr int kBooksLevelSizeIdx = 1;
