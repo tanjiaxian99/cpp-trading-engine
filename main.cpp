@@ -97,17 +97,32 @@ int main() {
         const std::string subscribe_msg =
             R"({"op":"subscribe","args":)"
             R"([{"channel":"books","instId":"BTC-USDT"},{"channel":"trades","instId":"BTC-USDT"}]})";
+        const std::string books_unsubscribe_msg =
+            R"({"op":"unsubscribe","args":[{"channel":"books","instId":"BTC-USDT"}]})";
+        const std::string books_subscribe_msg =
+            R"({"op":"subscribe","args":[{"channel":"books","instId":"BTC-USDT"}]})";
+
         ws_client.SetOnConnected([&ws_client, &subscribe_msg]() {
             ws_client.Send(subscribe_msg);
             std::cout << "sent books+trades subscribe request\n";
         });
-        ws_client.SetOnMessage([&order_book](std::string_view message) {
-            if (ApplyBookMessage(message, order_book)) {
-                std::cout << "book: bid=" << order_book.BestBid().value_or(0.0)
-                          << " ask=" << order_book.BestAsk().value_or(0.0)
-                          << " seqId=" << order_book.LastSeqId() << "\n";
-            } else {
-                std::cout << "WS message: " << message << "\n";
+        ws_client.SetOnMessage([&order_book, &ws_client, &books_unsubscribe_msg,
+                                &books_subscribe_msg](std::string_view message) {
+            switch (ApplyBookMessage(message, order_book)) {
+                case BookMessageResult::kApplied:
+                    std::cout << "book: bid=" << order_book.BestBid().value_or(0.0)
+                              << " ask=" << order_book.BestAsk().value_or(0.0)
+                              << " seqId=" << order_book.LastSeqId() << "\n";
+                    break;
+                case BookMessageResult::kGapDetected:
+                    std::cerr << "Order book sequence gap detected — resubscribing for a fresh "
+                                 "snapshot\n";
+                    ws_client.Send(books_unsubscribe_msg);
+                    ws_client.Send(books_subscribe_msg);
+                    break;
+                case BookMessageResult::kIgnored:
+                    std::cout << "WS message: " << message << "\n";
+                    break;
             }
         });
 

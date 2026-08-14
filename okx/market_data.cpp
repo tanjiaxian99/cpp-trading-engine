@@ -56,15 +56,15 @@ void ApplyLevels(std::string_view data, std::string_view key, OrderBook& book) {
 }
 }  // namespace
 
-bool ApplyBookMessage(std::string_view message, OrderBook& book) {
+BookMessageResult ApplyBookMessage(std::string_view message, OrderBook& book) {
     const auto channel = json::FindString(message, kChannel);
     if (channel != kBooksChannel) {
-        return false;
+        return BookMessageResult::kIgnored;
     }
 
     const auto maybe_data = json::FindArrayElement(message, kData, 0);
     if (!maybe_data) {
-        return false;
+        return BookMessageResult::kIgnored;
     }
 
     const std::string_view data = *maybe_data;
@@ -74,12 +74,22 @@ bool ApplyBookMessage(std::string_view message, OrderBook& book) {
         throw std::runtime_error(std::format("Malformed books channel message: {}", data));
     }
 
-    if (ParseLL(*prev_seq_id_text) == kSnapshotSeqId) {
+    const long long prev_seq_id = ParseLL(*prev_seq_id_text);
+    const bool is_snapshot = prev_seq_id == kSnapshotSeqId;
+
+    // A non-snapshot push must chain directly onto the book's last applied
+    // seqId. A mismatch means an update was missed in between — the book is
+    // stale and must not be trusted until a fresh snapshot resets it.
+    if (!is_snapshot && book.HasSnapshot() && prev_seq_id != book.LastSeqId()) {
+        return BookMessageResult::kGapDetected;
+    }
+
+    if (is_snapshot) {
         book.BeginSnapshot();
     }
     ApplyLevels(data, kBids, book);
     ApplyLevels(data, kAsks, book);
     book.SetSeqId(ParseLL(*seq_id_text));
 
-    return true;
+    return BookMessageResult::kApplied;
 }

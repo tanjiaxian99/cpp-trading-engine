@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Rejects commits whose staged C++ files are not clang-format clean.
+#
+# Checks the *staged* content rather than the working tree, so partially staged
+# files are judged on exactly what would be committed.
+#
+# Enable with:  git config core.hooksPath .githooks
+# Bypass with:  git commit --no-verify
+
+set -euo pipefail
+
+# CLion ships its own clang-format; used as a fallback so the hook works without
+# an extra install, matching the CLANG_FORMAT_EXE lookup in CMakeLists.txt.
+CLION_HINT="/Applications/CLion.app/Contents/plugins/clion-radler/DotFiles/macos-arm64/clang-format"
+
+CLANG_FORMAT="${CLANG_FORMAT:-}"
+if [ -z "$CLANG_FORMAT" ]; then
+    if command -v clang-format >/dev/null 2>&1; then
+        CLANG_FORMAT="$(command -v clang-format)"
+    elif [ -x "$CLION_HINT" ]; then
+        CLANG_FORMAT="$CLION_HINT"
+    else
+        echo "pre-commit: clang-format not found, skipping format check." >&2
+        exit 0
+    fi
+fi
+
+files="$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(cpp|hpp|h)$' || true)"
+[ -z "$files" ] && exit 0
+
+unformatted=()
+while IFS= read -r file; do
+    staged="$(git show ":$file")"
+    if [ "$staged" != "$(printf '%s\n' "$staged" | "$CLANG_FORMAT" --assume-filename="$file")" ]; then
+        unformatted+=("$file")
+    fi
+done <<<"$files"
+
+if [ ${#unformatted[@]} -gt 0 ]; then
+    echo "pre-commit: staged changes are not clang-format clean:" >&2
+    printf '  %s\n' "${unformatted[@]}" >&2
+    echo >&2
+    echo "  fix:    $CLANG_FORMAT -i ${unformatted[*]}" >&2
+    echo "  stage:  git add ${unformatted[*]}" >&2
+    echo "  bypass: git commit --no-verify" >&2
+    exit 1
+fi

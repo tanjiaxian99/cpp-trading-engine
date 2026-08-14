@@ -84,6 +84,16 @@ cmake --build --preset release
 ctest --preset release
 ```
 
+Formatting is enforced by a pre-commit hook. `core.hooksPath` is per-clone config, so enable it
+once after cloning:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+The hook rejects commits whose staged C++ files are not clang-format clean; `cmake --build
+<dir> --target format` fixes the whole tree, and `format-check` reports without rewriting.
+
 ## Configuration
 
 Credentials are read from the environment. OKX issues three, not two:
@@ -267,9 +277,9 @@ Written from RFC 6455.
 - [x] Subscribe to the `books` and `trades` channels on the public endpoint — **1 h**
 - [x] Snapshot + incremental application, sequenced by `seqId` / `prevSeqId`
       (`prevSeqId` is `-1` on the initial snapshot) — **2.5 h**
-- [ ] Pre-allocated L2 book: fixed-size sorted arrays, zero allocation on update — **2.5 h**
-- [ ] Gap detection (`prevSeqId` ≠ last `seqId`) → resubscribe for a fresh snapshot — **1 h**
-- [ ] *(if still present)* CRC32 `checksum` validation against the local book — **1 h**
+- [x] Pre-allocated L2 book: fixed-size sorted arrays, zero allocation on update — **2.5 h**
+- [x] Gap detection (`prevSeqId` ≠ last `seqId`) → resubscribe for a fresh snapshot — **1 h**
+- [x] *(if still present)* CRC32 `checksum` validation against the local book — **1 h**
 
 > The snapshot arrives on the socket, so no separate REST snapshot fetch is needed and there
 > is no deltas-buffered-while-fetching window to handle. `books` pushes every 100 ms;
@@ -285,6 +295,16 @@ Written from RFC 6455.
 > push is the initial snapshot, exactly as this checklist already said. Also, each `[price,
 > size, ...]` level entry is a JSON array of **strings**, not bare numbers — quotes need
 > stripping before parsing.
+>
+> Forcing a fresh snapshot is **not** just re-sending `subscribe` while already subscribed —
+> OKX only pushes a new snapshot on `unsubscribe` followed by `subscribe`, which is what gap
+> recovery does.
+>
+> CRC32 checked off as a deliberate skip, not an implementation: `checksum` is present on every
+> live `books` push, but its value is fixed at `0` and OKX's docs say it must no longer be used
+> for integrity validation — `seqId`/`prevSeqId` supersede it. Writing a real CRC32 check
+> against a field that's always `0` would be dead code that can never meaningfully fail.
+> Revisit if OKX ever re-enables it.
 
 ### B3 · Private channel — 5–7 h
 
