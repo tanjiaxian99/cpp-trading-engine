@@ -23,4 +23,4 @@ std::optional<std::string_view> FindElement(std::string_view json_array, std::si
 // Loop through every array element at the key
 void ForEachArrayElement(std::string_view json, std::string_view key,
                          const std::function<void(std::string_view)>& action);
-} // namespace json
+}  // namespace json
