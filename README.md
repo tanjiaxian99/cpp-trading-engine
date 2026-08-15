@@ -331,7 +331,7 @@ reconciliation, cancel-all — which is what the Design table already claims it 
 
 - [x] `op: "order"` request framing, `id` field generated and correlated to `clOrdId` — **2 h**
 - [x] `op: "cancel-order"`, `op: "amend-order"`; `batch-orders` for multi-leg requotes — **1.5 h**
-- [ ] Response demux: match the ack's `id` back to the originating order, route to the
+- [x] Response demux: match the ack's `id` back to the originating order, route to the
       state machine — **1.5 h**
 - [ ] TX path: encode into the engine-owned TX ring, mask, one `write()` — **1 h**
 - [ ] REST fallback when the private socket is down, behind the same risk checks — **1 h**

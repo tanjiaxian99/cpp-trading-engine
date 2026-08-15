@@ -45,6 +45,7 @@ add_executable(trading_engine main.cpp config.hpp
         okx/response_utils.hpp okx/response_utils.cpp
         okx/instrument.hpp okx/instrument.cpp okx/orders.hpp okx/orders.cpp
         okx/ws_orders.hpp okx/ws_orders.cpp
+        okx/ws_response_demux.hpp okx/ws_response_demux.cpp
         okx/heartbeat.hpp okx/heartbeat.cpp okx/ws_client.hpp okx/ws_client.cpp
         okx/order_book.hpp okx/order_book.cpp okx/market_data.hpp okx/market_data.cpp
         okx/order_events.hpp okx/order_events.cpp okx/account_state.hpp okx/account_state.cpp
