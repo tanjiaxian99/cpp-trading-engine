@@ -19,13 +19,6 @@ constexpr std::string_view kOrderBodyFormat =
     R"({{"instId":"{}","tdMode":"{}","side":"{}","ordType":"{}","px":"{}","sz":"{}","clOrdId":"{}"}})";
 constexpr std::string_view kCancelOrderBodyFormat = R"({{"instId":"{}","ordId":"{}"}})";
 
-std::string GenerateClOrdId() {
-    const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::chrono::system_clock::now().time_since_epoch())
-                            .count();
-    return std::to_string(now_ms);
-}
-
 // json::Find* returns std::nullopt when a field is absent — this
 // collapses that into an owned std::string, defaulting to kEmpty rather
 // than leaving OrderResult's fields with no value to report at all.
@@ -57,12 +50,19 @@ OrderResult ParseOrderResult(const HttpResponse& response) {
 }
 }  // namespace
 
+std::string GenerateId() {
+    const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::system_clock::now().time_since_epoch())
+                            .count();
+    return std::to_string(now_ms);
+}
+
 OrderResult PlaceOrder(RestClient& rest_client, const OkxAuth& auth, const OrderRequest& request) {
     if (request.ord_type == kMarket) {
         throw std::invalid_argument("Market orders are not yet supported");
     }
 
-    const std::string cl_ord_id = GenerateClOrdId();
+    const std::string cl_ord_id = GenerateId();
     const std::string body = std::format(kOrderBodyFormat, request.inst_id, kCash, request.side,
                                          request.ord_type, request.px, request.sz, cl_ord_id);
     const HttpResponse response =

@@ -73,3 +73,17 @@ constexpr std::string_view kDetails = "details";
 constexpr std::string_view kCcy = "ccy";
 constexpr std::string_view kCashBal = "cashBal";
 constexpr std::string_view kAvailBal = "availBal";
+
+// WebSocket trade op responses (op: "order" / "cancel-order" / "amend-order" / "batch-orders")
+constexpr std::string_view kOp = "op";
+constexpr std::string_view kOrderOp = "order";
+constexpr std::string_view kCancelOrderOp = "cancel-order";
+constexpr std::string_view kAmendOrderOp = "amend-order";
+constexpr std::string_view kBatchOrdersOp = "batch-orders";
+
+// Numeric instrument identifier that WS order operation channels require in
+// place of instId since OKX's 2026-04-07 change. Fetched from the
+// authenticated GET /api/v5/account/instruments — its value can differ
+// between production and demo trading for the same instId, so it must not
+// be sourced from the public/unauthenticated instruments endpoint.
+constexpr std::string_view kInstIdCode = "instIdCode";

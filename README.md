@@ -329,8 +329,8 @@ polled or keepalive-maintained REST token.
 Orders go out on the session authenticated in B3. REST stays for cold-path work only — startup,
 reconciliation, cancel-all — which is what the Design table already claims it is for.
 
-- [ ] `op: "order"` request framing, `id` field generated and correlated to `clOrdId` — **2 h**
-- [ ] `op: "cancel-order"`, `op: "amend-order"`; `batch-orders` for multi-leg requotes — **1.5 h**
+- [x] `op: "order"` request framing, `id` field generated and correlated to `clOrdId` — **2 h**
+- [x] `op: "cancel-order"`, `op: "amend-order"`; `batch-orders` for multi-leg requotes — **1.5 h**
 - [ ] Response demux: match the ack's `id` back to the originating order, route to the
       state machine — **1.5 h**
 - [ ] TX path: encode into the engine-owned TX ring, mask, one `write()` — **1 h**
@@ -343,6 +343,12 @@ reconciliation, cancel-all — which is what the Design table already claims it 
 >
 > The two-level envelope check from A4 applies identically here: a WS ack carries per-item
 > `sCode`/`sMsg`, and both levels must be checked before treating an order as live.
+>
+> OKX's 2026-04-07 change deprecated `instId` on WS `order`/`cancel-order`/`amend-order`/
+> `batch-orders` requests in favor of a numeric `instIdCode` — sending `instId` now fails with
+> `sCode 50014 "Parameter instIdCode can not be empty."`. `instIdCode` must come from the
+> authenticated `GET /api/v5/account/instruments`, not the public `/instruments` endpoint — its
+> value can differ between production and demo trading for the same `instId`.
 
 ### B5 · Order lifecycle — 6–8 h
 

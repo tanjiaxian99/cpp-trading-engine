@@ -16,6 +16,7 @@
 #include "okx/order_events.hpp"
 #include "okx/orders.hpp"
 #include "okx/ws_client.hpp"
+#include "okx/ws_orders.hpp"
 #include "rest/rest_client.hpp"
 #include "util/json.hpp"
 
@@ -71,12 +72,16 @@ int main() {
         std::cout << "BTC-USDT: tickSz=" << spec.tick_sz << " lotSz=" << spec.lot_sz
                   << " minSz=" << spec.min_sz << "\n";
 
+        const long long eth_usdt_inst_id_code = FetchInstIdCode(rest_client, auth, "ETH-USDT");
+        std::cout << "ETH-USDT instIdCode=" << eth_usdt_inst_id_code << "\n";
+
         const OrderRequest order_request{
             .inst_id = "ETH-USDT",
             .side = std::string(kBuy),
             .ord_type = std::string(kLimit),
             .px = "100",
             .sz = "0.01",
+            .inst_id_code = eth_usdt_inst_id_code,
         };
         const OrderResult place_result = PlaceOrder(rest_client, auth, order_request);
         std::cout << "place order: accepted=" << place_result.accepted
@@ -130,6 +135,9 @@ int main() {
 
         OkxWsClient private_ws_client(io_context, "wspap.okx.com", "8443", "/ws/v5/private");
         AccountState account_state;
+        // Tracks the ordId across the WS order -> amend -> cancel smoke-test
+        // chain below, ahead of B4's proper response-demux item.
+        std::string ws_ord_id;
 
         const std::string private_subscribe_msg =
             R"({"op":"subscribe","args":)"
@@ -141,41 +149,71 @@ int main() {
             std::cout << "sent private WS login request\n";
         });
 
-        private_ws_client.SetOnMessage([&private_ws_client, &private_subscribe_msg, &rest_client,
-                                        &auth, &account_state](std::string_view message) {
-            if (json::FindString(message, kEvent) == kLoginEvent) {
-                const auto code = json::FindString(message, kCode).value_or(kEmpty);
-                std::cout << "private WS login: code=" << code
-                          << " msg=" << json::FindString(message, kMsg).value_or(kEmpty) << "\n";
-                if (code == kSuccessCode) {
-                    private_ws_client.Send(private_subscribe_msg);
-                    std::cout << "sent orders/account/positions subscribe request\n";
-
-                    const HttpResponse pending = GetPendingOrders(rest_client, auth);
-                    std::cout << "pending orders reconciliation: " << pending.body << "\n";
-                }
-                return;
-            }
-
-            const auto channel = json::FindString(message, kChannel);
-            if (channel == kOrdersChannel) {
-                ForEachOrderEvent(message, [](const OrderEvent& event) {
-                    std::cout << "order event: type=" << ToString(event.type)
-                              << " ordId=" << event.ord_id << " instId=" << event.inst_id
-                              << " side=" << event.side << " px=" << event.px << " sz=" << event.sz
-                              << " accFillSz=" << event.acc_fill_sz << " avgPx=" << event.avg_px
+        private_ws_client.SetOnMessage(
+            [&private_ws_client, &private_subscribe_msg, &rest_client, &auth, &account_state,
+             &order_request, &eth_usdt_inst_id_code, &ws_ord_id](std::string_view message) {
+                if (json::FindString(message, kEvent) == kLoginEvent) {
+                    const auto code = json::FindString(message, kCode).value_or(kEmpty);
+                    std::cout << "private WS login: code=" << code
+                              << " msg=" << json::FindString(message, kMsg).value_or(kEmpty)
                               << "\n";
-                });
-            } else if (channel == kAccountChannel) {
-                account_state.ApplyMessage(message);
-                account_state.ForEachBalance([](const AccountState::Balance& balance) {
-                    std::cout << "account: ccy=" << balance.ccy << " cashBal=" << balance.cash_bal
-                              << " availBal=" << balance.avail_bal << "\n";
-                });
-            } else {
-                std::cout << "private WS message: " << message << "\n";
-            }
-        });
+                    if (code == kSuccessCode) {
+                        private_ws_client.Send(private_subscribe_msg);
+                        std::cout << "sent orders/account/positions subscribe request\n";
+
+                        const HttpResponse pending = GetPendingOrders(rest_client, auth);
+                        std::cout << "pending orders reconciliation: " << pending.body << "\n";
+
+                        const WsOrderRequest ws_order = BuildWsOrderMessage(order_request);
+                        private_ws_client.Send(ws_order.message);
+                        std::cout << "sent WS order request id=" << ws_order.id << "\n";
+                    }
+                    return;
+                }
+
+                const auto op = json::FindString(message, kOp);
+                if (op == kOrderOp || op == kAmendOrderOp || op == kCancelOrderOp) {
+                    std::cout << "WS " << *op << " response: " << message << "\n";
+
+                    if (op == kOrderOp) {
+                        const auto data = json::FindArrayElement(message, kData, 0);
+                        const auto ord_id = data ? json::FindString(*data, kOrdId) : std::nullopt;
+                        if (ord_id) {
+                            ws_ord_id = std::string(*ord_id);
+                            const WsOrderRequest amend = BuildWsAmendOrderMessage(
+                                eth_usdt_inst_id_code, ws_ord_id, "101", order_request.sz);
+                            private_ws_client.Send(amend.message);
+                            std::cout << "sent WS amend-order request id=" << amend.id << "\n";
+                        }
+                    } else if (op == kAmendOrderOp) {
+                        const WsOrderRequest cancel =
+                            BuildWsCancelOrderMessage(eth_usdt_inst_id_code, ws_ord_id);
+                        private_ws_client.Send(cancel.message);
+                        std::cout << "sent WS cancel-order request id=" << cancel.id << "\n";
+                    }
+                    return;
+                }
+
+                const auto channel = json::FindString(message, kChannel);
+                if (channel == kOrdersChannel) {
+                    ForEachOrderEvent(message, [](const OrderEvent& event) {
+                        std::cout << "order event: type=" << ToString(event.type)
+                                  << " ordId=" << event.ord_id << " instId=" << event.inst_id
+                                  << " side=" << event.side << " px=" << event.px
+                                  << " sz=" << event.sz << " accFillSz=" << event.acc_fill_sz
+                                  << " avgPx=" << event.avg_px << "\n";
+                    });
+                } else if (channel == kAccountChannel) {
+                    account_state.ApplyMessage(message);
+                    account_state.ForEachBalance([](const AccountState::Balance& balance) {
+                        std::cout << "account: ccy=" << balance.ccy
+                                  << " cashBal=" << balance.cash_bal
+                                  << " availBal=" << balance.avail_bal << "\n";
+                    });
+                } else {
+                    std::cout << "private WS message: " << message << "\n";
+                }
+            });
 
         ws_client.Start();
         private_ws_client.Start();

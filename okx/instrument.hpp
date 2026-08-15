@@ -3,6 +3,7 @@
 #include <string>
 #include <string_view>
 
+#include "okx/auth.hpp"
 #include "rest/rest_client.hpp"
 
 struct InstrumentSpec {
@@ -13,3 +14,4 @@ struct InstrumentSpec {
 };
 
 InstrumentSpec FetchInstrumentSpec(RestClient& rest_client, std::string_view inst_id);
+long long FetchInstIdCode(RestClient& rest_client, const OkxAuth& auth, std::string_view inst_id);

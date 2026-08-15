@@ -12,6 +12,7 @@ struct OrderRequest {
     std::string ord_type;
     std::string px;
     std::string sz;
+    long long inst_id_code = 0;
 };
 
 struct OrderResult {
@@ -23,6 +24,7 @@ struct OrderResult {
     std::string s_msg;
 };
 
+std::string GenerateId();
 OrderResult PlaceOrder(RestClient& rest_client, const OkxAuth& auth, const OrderRequest& request);
 OrderResult CancelOrder(RestClient& rest_client, const OkxAuth& auth, std::string_view inst_id,
                         std::string_view ord_id);
