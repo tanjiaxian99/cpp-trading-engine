@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "okx/okx_constants.hpp"
+#include "okx/response_utils.hpp"
 #include "util/json.hpp"
 
 void AccountState::ApplyMessage(std::string_view message) {
@@ -11,7 +12,7 @@ void AccountState::ApplyMessage(std::string_view message) {
         return;
     }
 
-    const auto maybe_data = json::FindArrayElement(message, kData, 0);
+    const auto maybe_data = FindData(message);
     if (!maybe_data) {
         return;
     }

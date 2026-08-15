@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 #include "okx/okx_constants.hpp"
+#include "okx/response_utils.hpp"
 #include "util/json.hpp"
 
 using enum HttpMethod;
@@ -35,7 +36,7 @@ OrderResult ParseOrderResult(const HttpResponse& response) {
 
     result.code = ValueOrEmpty(json::FindString(response.body, kCode));
 
-    const auto maybe_data = json::FindArrayElement(response.body, kData, 0);
+    const auto maybe_data = FindData(response.body);
     if (!maybe_data) {
         return result;  // request-level failure — nothing order-specific to report
     }

@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "okx/okx_constants.hpp"
+#include "okx/response_utils.hpp"
 #include "util/json.hpp"
 
 namespace {
@@ -41,7 +42,7 @@ BookMessageResult ApplyBookMessage(std::string_view message, OrderBook& book) {
         return BookMessageResult::kIgnored;
     }
 
-    const auto maybe_data = json::FindArrayElement(message, kData, 0);
+    const auto maybe_data = FindData(message);
     if (!maybe_data) {
         return BookMessageResult::kIgnored;
     }

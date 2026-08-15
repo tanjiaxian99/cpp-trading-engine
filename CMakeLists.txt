@@ -42,6 +42,7 @@ add_executable(trading_engine main.cpp config.hpp
         net/websocket_reassembler.hpp
         rest/rest_client.hpp rest/rest_client.cpp
         okx/auth.hpp okx/auth.cpp okx/okx_constants.hpp
+        okx/response_utils.hpp okx/response_utils.cpp
         okx/instrument.hpp okx/instrument.cpp okx/orders.hpp okx/orders.cpp
         okx/ws_orders.hpp okx/ws_orders.cpp
         okx/heartbeat.hpp okx/heartbeat.cpp okx/ws_client.hpp okx/ws_client.cpp

@@ -15,6 +15,7 @@
 #include "okx/order_book.hpp"
 #include "okx/order_events.hpp"
 #include "okx/orders.hpp"
+#include "okx/response_utils.hpp"
 #include "okx/ws_client.hpp"
 #include "okx/ws_orders.hpp"
 #include "rest/rest_client.hpp"
@@ -26,7 +27,7 @@ namespace {
 // general-purpose scanner (json::FindArrayElement + json::FindString)
 // rather than a one-off ad-hoc lookup.
 long long ExtractTimestampMs(const std::string& public_time_body) {
-    const auto data = json::FindArrayElement(public_time_body, kData, 0);
+    const auto data = FindData(public_time_body);
     if (!data) {
         throw std::runtime_error("Could not find data[0] in /public/time response");
     }
@@ -176,7 +177,7 @@ int main() {
                     std::cout << "WS " << *op << " response: " << message << "\n";
 
                     if (op == kOrderOp) {
-                        const auto data = json::FindArrayElement(message, kData, 0);
+                        const auto data = FindData(message);
                         const auto ord_id = data ? json::FindString(*data, kOrdId) : std::nullopt;
                         if (ord_id) {
                             ws_ord_id = std::string(*ord_id);

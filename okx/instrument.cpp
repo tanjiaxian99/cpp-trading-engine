@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "okx/okx_constants.hpp"
+#include "okx/response_utils.hpp"
 #include "util/json.hpp"
 
 constexpr std::string_view kInstrumentsPathFormat =
@@ -15,7 +16,7 @@ InstrumentSpec FetchInstrumentSpec(RestClient& rest_client, std::string_view ins
     const std::string path = std::format(kInstrumentsPathFormat, inst_id);
     const HttpResponse response = rest_client.Get(path);
 
-    const auto data = json::FindArrayElement(response.body, kData, 0);
+    const auto data = FindData(response.body);
     if (!data) {
         throw std::runtime_error(std::format("Instrument not found: {}", inst_id));
     }
@@ -40,7 +41,7 @@ long long FetchInstIdCode(RestClient& rest_client, const OkxAuth& auth, std::str
     const std::string path = std::format(kAccountInstrumentsPathFormat, inst_id);
     const HttpResponse response = rest_client.Get(path, auth.SignHeaders(HttpMethod::kGet, path));
 
-    const auto data = json::FindArrayElement(response.body, kData, 0);
+    const auto data = FindData(response.body);
     if (!data) {
         throw std::runtime_error(std::format("Instrument not found: {}", inst_id));
     }
