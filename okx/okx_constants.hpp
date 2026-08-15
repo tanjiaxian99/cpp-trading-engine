@@ -6,6 +6,7 @@ constexpr std::string_view kEmpty = "";
 
 // General JSON response fields
 constexpr std::string_view kCode = "code";
+constexpr std::string_view kMsg = "msg";
 constexpr std::string_view kData = "data";
 constexpr std::string_view kOrdId = "ordId";
 constexpr std::string_view kClOrdId = "clOrdId";
@@ -34,6 +35,10 @@ constexpr std::string_view kBaseCcy = "base_ccy";
 // WebSocket application-level heartbeat
 constexpr std::string_view kOkxPingText = "ping";
 constexpr std::string_view kOkxPongText = "pong";
+
+// WebSocket private channel login
+constexpr std::string_view kEvent = "event";
+constexpr std::string_view kLoginEvent = "login";
 
 // WebSocket public channel push messages
 constexpr std::string_view kChannel = "channel";

@@ -23,6 +23,8 @@ public:
                                                        std::string_view request_path,
                                                        std::string_view body = "") const;
 
+    [[nodiscard]] std::string BuildWsLoginMessage() const;
+
 private:
     std::string api_key_;
     std::string api_secret_;

@@ -126,7 +126,35 @@ int main() {
             }
         });
 
+        OkxWsClient private_ws_client(io_context, "wspap.okx.com", "8443", "/ws/v5/private");
+
+        const std::string private_subscribe_msg =
+            R"({"op":"subscribe","args":)"
+            R"([{"channel":"orders","instType":"SPOT"},{"channel":"account"},)"
+            R"({"channel":"positions","instType":"ANY"}]})";
+
+        private_ws_client.SetOnConnected([&private_ws_client, &auth]() {
+            private_ws_client.Send(auth.BuildWsLoginMessage());
+            std::cout << "sent private WS login request\n";
+        });
+
+        private_ws_client.SetOnMessage([&private_ws_client,
+                                        &private_subscribe_msg](std::string_view message) {
+            if (json::FindString(message, kEvent) == kLoginEvent) {
+                const auto code = json::FindString(message, kCode).value_or(kEmpty);
+                std::cout << "private WS login: code=" << code
+                          << " msg=" << json::FindString(message, kMsg).value_or(kEmpty) << "\n";
+                if (code == kSuccessCode) {
+                    private_ws_client.Send(private_subscribe_msg);
+                    std::cout << "sent orders/account/positions subscribe request\n";
+                }
+            } else {
+                std::cout << "private WS message: " << message << "\n";
+            }
+        });
+
         ws_client.Start();
+        private_ws_client.Start();
         io_context.run();
         return 0;
     } catch (const std::exception& e) {

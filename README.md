@@ -311,10 +311,10 @@ Written from RFC 6455.
 Order and account updates arrive over an authenticated WebSocket session rather than a
 polled or keepalive-maintained REST token.
 
-- [ ] WS login: `op: "login"` with `apiKey` / `passphrase` / `timestamp` / `sign`.
+- [x] WS login: `op: "login"` with `apiKey` / `passphrase` / `timestamp` / `sign`.
       Timestamp here is **Unix epoch seconds as a string** — *not* the ISO 8601 format used
       for REST. Prehash is `timestamp + "GET" + "/users/self/verify"`. Expires after 30 s — **1.5 h**
-- [ ] Subscribe to `orders`, `account`, `positions` — **1 h**
+- [x] Subscribe to `orders`, `account`, `positions` — **1 h**
 - [ ] `orders` channel → normalized ack / partial-fill / fill / reject events — **2 h**
 - [ ] `account` channel → balance and position tracking — **1 h**
 - [ ] On reconnect: re-login, resubscribe, reconcile against

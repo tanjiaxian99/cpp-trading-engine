@@ -13,19 +13,14 @@
 
 #include "util/base64.hpp"
 
-constexpr std::string_view kIsoTimestampFormat = "{:%Y-%m-%dT%H:%M:%S}Z";
-
-std::string IsoTimestampNow() {
-    // floor to millisecond precision first — %S then prints the truncated
-    // sub-second remainder (".123") as part of the formatted string,
-    // giving exactly the millisecond precision OKX's signing requires.
-    const auto now =
-        std::chrono::floor<std::chrono::milliseconds>(std::chrono::system_clock::now());
-    return std::format(kIsoTimestampFormat, now);
-}
-
 namespace {
+constexpr std::string_view kIsoTimestampFormat = "{:%Y-%m-%dT%H:%M:%S}Z";
 constexpr const char* kHmacAlgorithm = "HMAC";
+constexpr std::array<std::string_view, 2> kHttpMethodNames = {"GET", "POST"};
+constexpr std::string_view kWsLoginPath = "/users/self/verify";
+constexpr std::string_view kWsLoginMethod = "GET";
+constexpr std::string_view kWsLoginBodyFormat =
+    R"({{"op":"login","args":[{{"apiKey":"{}","passphrase":"{}","timestamp":"{}","sign":"{}"}}]}})";
 
 // OSSL_PARAM_construct_utf8_string wants a non-const buffer
 char sha256_digest_name[] = "SHA256";  // NOLINT(modernize-avoid-c-arrays)
@@ -65,12 +60,24 @@ std::vector<unsigned char> HmacSha256(std::string_view message, std::string_view
     return digest;
 }
 
-constexpr std::array<std::string_view, 2> kHttpMethodNames = {"GET", "POST"};
-
 std::string_view ToString(HttpMethod method) {
     return kHttpMethodNames.at(static_cast<std::size_t>(method));
 }
+
+std::string UnixTimestampSecondsNow() {
+    const auto now_s = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
+    return std::to_string(now_s.time_since_epoch().count());
+}
 }  // namespace
+
+std::string IsoTimestampNow() {
+    // Floor to millisecond precision first — %S then prints the truncated
+    // sub-second remainder (".123") as part of the formatted string,
+    // giving exactly the millisecond precision OKX's signing requires.
+    const auto now =
+        std::chrono::floor<std::chrono::milliseconds>(std::chrono::system_clock::now());
+    return std::format(kIsoTimestampFormat, now);
+}
 
 std::string HmacSha256Base64(std::string_view message, std::string_view secret) {
     return Base64Encode(HmacSha256(message, secret));
@@ -94,4 +101,13 @@ std::vector<std::string> OkxAuth::SignHeaders(HttpMethod method, std::string_vie
         "OK-ACCESS-TIMESTAMP: " + timestamp, "OK-ACCESS-PASSPHRASE: " + passphrase_,
         "Content-Type: application/json",    "x-simulated-trading: 1",
     };
+}
+
+std::string OkxAuth::BuildWsLoginMessage() const {
+    const std::string timestamp = UnixTimestampSecondsNow();
+
+    const std::string prehash = timestamp + std::string(kWsLoginMethod) + std::string(kWsLoginPath);
+    const std::string signature = HmacSha256Base64(prehash, api_secret_);
+
+    return std::format(kWsLoginBodyFormat, api_key_, passphrase_, timestamp, signature);
 }
