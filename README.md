@@ -315,9 +315,9 @@ polled or keepalive-maintained REST token.
       Timestamp here is **Unix epoch seconds as a string** — *not* the ISO 8601 format used
       for REST. Prehash is `timestamp + "GET" + "/users/self/verify"`. Expires after 30 s — **1.5 h**
 - [x] Subscribe to `orders`, `account`, `positions` — **1 h**
-- [ ] `orders` channel → normalized ack / partial-fill / fill / reject events — **2 h**
-- [ ] `account` channel → balance and position tracking — **1 h**
-- [ ] On reconnect: re-login, resubscribe, reconcile against
+- [x] `orders` channel → normalized ack / partial-fill / fill / reject events — **2 h**
+- [x] `account` channel → balance and position tracking — **1 h**
+- [x] On reconnect: re-login, resubscribe, reconcile against
       `GET /api/v5/trade/orders-pending` — **1.5 h**
 
 > Two different timestamp formats and two different prehash strings for REST vs WebSocket

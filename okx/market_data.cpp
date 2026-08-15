@@ -1,7 +1,5 @@
 #include "okx/market_data.hpp"
 
-#include <charconv>
-#include <cstdlib>
 #include <format>
 #include <stdexcept>
 
@@ -10,25 +8,6 @@
 
 namespace {
 constexpr char kDoubleQuote = '"';
-
-double ParseDouble(std::string_view text) {
-    char* end = nullptr;
-    const double value =
-        std::strtod(text.data(), &end);  // NOLINT(bugprone-suspicious-stringview-data-usage)
-    if (end == text.data()) {
-        throw std::runtime_error("Failed to parse double order book field");
-    }
-    return value;
-}
-
-long long ParseLL(std::string_view text) {
-    long long value = 0;
-    const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
-    if (result.ec != std::errc{}) {
-        throw std::runtime_error("Failed to parse long long order book field");
-    }
-    return value;
-}
 
 std::string_view StripQuotes(std::string_view text) {
     if (text.size() >= 2 && text.front() == kDoubleQuote && text.back() == kDoubleQuote) {
@@ -45,8 +24,8 @@ void ApplyLevels(std::string_view data, std::string_view key, OrderBook& book) {
             throw std::runtime_error("Malformed order book price level");
         }
 
-        const double price = ParseDouble(StripQuotes(*price_text));
-        const double size = ParseDouble(StripQuotes(*size_text));
+        const double price = json::ParseDouble(StripQuotes(*price_text));
+        const double size = json::ParseDouble(StripQuotes(*size_text));
         if (key == kBids) {
             book.SetBid(price, size);
         } else {
@@ -74,7 +53,7 @@ BookMessageResult ApplyBookMessage(std::string_view message, OrderBook& book) {
         throw std::runtime_error(std::format("Malformed books channel message: {}", data));
     }
 
-    const long long prev_seq_id = ParseLL(*prev_seq_id_text);
+    const long long prev_seq_id = json::ParseLL(*prev_seq_id_text);
     const bool is_snapshot = prev_seq_id == kSnapshotSeqId;
 
     // A non-snapshot push must chain directly onto the book's last applied
@@ -89,7 +68,7 @@ BookMessageResult ApplyBookMessage(std::string_view message, OrderBook& book) {
     }
     ApplyLevels(data, kBids, book);
     ApplyLevels(data, kAsks, book);
-    book.SetSeqId(ParseLL(*seq_id_text));
+    book.SetSeqId(json::ParseLL(*seq_id_text));
 
     return BookMessageResult::kApplied;
 }

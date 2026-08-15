@@ -1,6 +1,9 @@
 #include "util/json.hpp"
 
+#include <charconv>
+#include <cstdlib>
 #include <format>
+#include <stdexcept>
 #include <string>
 
 namespace json {
@@ -191,5 +194,24 @@ void ForEachArrayElement(std::string_view json, std::string_view key,
             pos++;
         }
     }
+}
+
+double ParseDouble(std::string_view text) {
+    char* end = nullptr;
+    const double value =
+        std::strtod(text.data(), &end);  // NOLINT(bugprone-suspicious-stringview-data-usage)
+    if (end == text.data()) {
+        throw std::runtime_error("Failed to parse double");
+    }
+    return value;
+}
+
+long long ParseLL(std::string_view text) {
+    long long value = 0;
+    const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (result.ec != std::errc{}) {
+        throw std::runtime_error("Failed to parse long long");
+    }
+    return value;
 }
 }  // namespace json

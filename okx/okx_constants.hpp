@@ -51,3 +51,25 @@ constexpr std::string_view kAsks = "asks";
 constexpr std::string_view kBids = "bids";
 constexpr int kBooksLevelPriceIdx = 0;
 constexpr int kBooksLevelSizeIdx = 1;
+
+// WebSocket "orders" channel push messages
+constexpr std::string_view kOrdersChannel = "orders";
+constexpr std::string_view kInstId = "instId";
+constexpr std::string_view kSide = "side";
+constexpr std::string_view kPx = "px";
+constexpr std::string_view kSz = "sz";
+constexpr std::string_view kAccFillSz = "accFillSz";
+constexpr std::string_view kAvgPx = "avgPx";
+constexpr std::string_view kState = "state";
+constexpr std::string_view kStateLive = "live";
+constexpr std::string_view kStatePartiallyFilled = "partially_filled";
+constexpr std::string_view kStateFilled = "filled";
+constexpr std::string_view kStateCanceled = "canceled";
+constexpr std::string_view kStateMmpCanceled = "mmp_canceled";
+
+// WebSocket "account" channel push messages
+constexpr std::string_view kAccountChannel = "account";
+constexpr std::string_view kDetails = "details";
+constexpr std::string_view kCcy = "ccy";
+constexpr std::string_view kCashBal = "cashBal";
+constexpr std::string_view kAvailBal = "availBal";

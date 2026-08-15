@@ -23,4 +23,10 @@ std::optional<std::string_view> FindElement(std::string_view json_array, std::si
 // Loop through every array element at the key
 void ForEachArrayElement(std::string_view json, std::string_view key,
                          const std::function<void(std::string_view)>& action);
+
+// Parses a JSON decimal number, e.g. "123.45" -> 123.45
+double ParseDouble(std::string_view text);
+
+// Parses a JSON numeric, e.g. "12345" -> 12345
+long long ParseLL(std::string_view text);
 }  // namespace json

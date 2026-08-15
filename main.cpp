@@ -7,11 +7,13 @@
 #include <string>
 
 #include "config.hpp"
+#include "okx/account_state.hpp"
 #include "okx/auth.hpp"
 #include "okx/instrument.hpp"
 #include "okx/market_data.hpp"
 #include "okx/okx_constants.hpp"
 #include "okx/order_book.hpp"
+#include "okx/order_events.hpp"
 #include "okx/orders.hpp"
 #include "okx/ws_client.hpp"
 #include "rest/rest_client.hpp"
@@ -127,6 +129,7 @@ int main() {
         });
 
         OkxWsClient private_ws_client(io_context, "wspap.okx.com", "8443", "/ws/v5/private");
+        AccountState account_state;
 
         const std::string private_subscribe_msg =
             R"({"op":"subscribe","args":)"
@@ -138,8 +141,8 @@ int main() {
             std::cout << "sent private WS login request\n";
         });
 
-        private_ws_client.SetOnMessage([&private_ws_client,
-                                        &private_subscribe_msg](std::string_view message) {
+        private_ws_client.SetOnMessage([&private_ws_client, &private_subscribe_msg, &rest_client,
+                                        &auth, &account_state](std::string_view message) {
             if (json::FindString(message, kEvent) == kLoginEvent) {
                 const auto code = json::FindString(message, kCode).value_or(kEmpty);
                 std::cout << "private WS login: code=" << code
@@ -147,7 +150,28 @@ int main() {
                 if (code == kSuccessCode) {
                     private_ws_client.Send(private_subscribe_msg);
                     std::cout << "sent orders/account/positions subscribe request\n";
+
+                    const HttpResponse pending = GetPendingOrders(rest_client, auth);
+                    std::cout << "pending orders reconciliation: " << pending.body << "\n";
                 }
+                return;
+            }
+
+            const auto channel = json::FindString(message, kChannel);
+            if (channel == kOrdersChannel) {
+                ForEachOrderEvent(message, [](const OrderEvent& event) {
+                    std::cout << "order event: type=" << ToString(event.type)
+                              << " ordId=" << event.ord_id << " instId=" << event.inst_id
+                              << " side=" << event.side << " px=" << event.px << " sz=" << event.sz
+                              << " accFillSz=" << event.acc_fill_sz << " avgPx=" << event.avg_px
+                              << "\n";
+                });
+            } else if (channel == kAccountChannel) {
+                account_state.ApplyMessage(message);
+                account_state.ForEachBalance([](const AccountState::Balance& balance) {
+                    std::cout << "account: ccy=" << balance.ccy << " cashBal=" << balance.cash_bal
+                              << " availBal=" << balance.avail_bal << "\n";
+                });
             } else {
                 std::cout << "private WS message: " << message << "\n";
             }
