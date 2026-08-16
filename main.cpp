@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <exception>
+#include <format>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -23,6 +24,50 @@
 #include "util/json.hpp"
 
 namespace {
+constexpr std::string_view kOkxRestBaseUrl = "https://www.okx.com";
+constexpr std::string_view kOkxWsHost = "wspap.okx.com";
+constexpr std::string_view kOkxWsPort = "8443";
+constexpr std::string_view kPublicWsPath = "/ws/v5/public";
+constexpr std::string_view kPrivateWsPath = "/ws/v5/private";
+
+constexpr std::string_view kBtcUsdt = "BTC-USDT";
+constexpr std::string_view kEthUsdt = "ETH-USDT";
+
+// Order params for the B4 WS order/amend/cancel smoke test — a limit buy
+// far enough below market that it never fills.
+constexpr std::string_view kSmokeTestPx = "100";
+constexpr std::string_view kSmokeTestAmendPx = "101";
+constexpr std::string_view kSmokeTestSz = "0.01";
+
+constexpr std::string_view kBooksSubscribeFormat =
+    R"({{"op":"subscribe","args":[{{"channel":"books","instId":"{0}"}},)"
+    R"({{"channel":"trades","instId":"{0}"}}]}})";
+constexpr std::string_view kBooksUnsubscribeFormat =
+    R"({{"op":"unsubscribe","args":[{{"channel":"books","instId":"{}"}}]}})";
+constexpr std::string_view kBooksResubscribeFormat =
+    R"({{"op":"subscribe","args":[{{"channel":"books","instId":"{}"}}]}})";
+constexpr std::string_view kPrivateSubscribeMsg =
+    R"({"op":"subscribe","args":)"
+    R"([{"channel":"orders","instType":"SPOT"},{"channel":"account"},)"
+    R"({"channel":"positions","instType":"ANY"}]})";
+
+void LogBookUpdate(const OrderBook& book) {
+    std::cout << "book: bid=" << book.BestBid().value_or(0.0)
+              << " ask=" << book.BestAsk().value_or(0.0) << " seqId=" << book.LastSeqId() << "\n";
+}
+
+void LogOrderEvent(const OrderEvent& event) {
+    std::cout << "order event: type=" << ToString(event.type) << " ordId=" << event.ord_id
+              << " instId=" << event.inst_id << " side=" << event.side << " px=" << event.px
+              << " sz=" << event.sz << " accFillSz=" << event.acc_fill_sz
+              << " avgPx=" << event.avg_px << "\n";
+}
+
+void LogAccountBalance(const AccountState::Balance& balance) {
+    std::cout << "account: ccy=" << balance.ccy << " cashBal=" << balance.cash_bal
+              << " availBal=" << balance.avail_bal << "\n";
+}
+
 // Extracts the server timestamp from /public/time's response, e.g.
 // {"code":"0","data":[{"ts":"1786204129995"}],"msg":""}, using the
 // general-purpose scanner (json::FindArrayElement + json::FindString)
@@ -38,6 +83,55 @@ long long ExtractTimestampMs(const std::string& public_time_body) {
     }
     return std::stoll(std::string(*ts));
 }
+
+class WsOrderRoundTrip {
+public:
+    WsOrderRoundTrip(OkxWsClient& ws_client, WsResponseDemux& demux,
+                     const OrderRequest& order_request)
+        : ws_client_(ws_client), demux_(demux), order_request_(order_request) {}
+
+    void Start() {
+        const WsOrderRequest order = BuildWsOrderMessage(order_request_);
+        ws_client_.Send(order.message);
+        std::cout << "sent WS order request id=" << order.id << "\n";
+        demux_.Track(order.id, [this](std::string_view response) { OnOrderResponse(response); });
+    }
+
+private:
+    void OnOrderResponse(std::string_view response) {
+        std::cout << "WS order response: " << response << "\n";
+        const auto data = FindData(response);
+        const auto ord_id = data ? json::FindString(*data, kOrdId) : std::nullopt;
+        if (!ord_id) {
+            return;
+        }
+        ord_id_ = std::string(*ord_id);
+
+        const WsOrderRequest amend = BuildWsAmendOrderMessage(order_request_.inst_id_code, ord_id_,
+                                                              kSmokeTestAmendPx, order_request_.sz);
+        ws_client_.Send(amend.message);
+        std::cout << "sent WS amend-order request id=" << amend.id << "\n";
+        demux_.Track(amend.id, [this](std::string_view response) { OnAmendResponse(response); });
+    }
+
+    void OnAmendResponse(std::string_view response) {
+        std::cout << "WS amend-order response: " << response << "\n";
+        const WsOrderRequest cancel =
+            BuildWsCancelOrderMessage(order_request_.inst_id_code, ord_id_);
+        ws_client_.Send(cancel.message);
+        std::cout << "sent WS cancel-order request id=" << cancel.id << "\n";
+        demux_.Track(cancel.id, [this](std::string_view response) { OnCancelResponse(response); });
+    }
+
+    void OnCancelResponse(std::string_view response) {
+        std::cout << "WS cancel-order response: " << response << "\n";
+    }
+
+    OkxWsClient& ws_client_;
+    WsResponseDemux& demux_;
+    const OrderRequest& order_request_;
+    std::string ord_id_;
+};
 }  // namespace
 
 int main() {
@@ -45,7 +139,7 @@ int main() {
         const Config config = Config::FromEnv();
         std::cout << "loaded config for key " << config.api_key << "\n";
 
-        RestClient rest_client("https://www.okx.com");
+        RestClient rest_client{std::string(kOkxRestBaseUrl)};
 
         // Public, unauthenticated endpoint — also used below for the clock
         // drift check A3 requires before signed requests can be trusted.
@@ -70,19 +164,19 @@ int main() {
 
         // Public, unauthenticated endpoint — proves instrument-spec fetch
         // and parsing end-to-end.
-        const InstrumentSpec spec = FetchInstrumentSpec(rest_client, "BTC-USDT");
+        const InstrumentSpec spec = FetchInstrumentSpec(rest_client, kBtcUsdt);
         std::cout << "BTC-USDT: tickSz=" << spec.tick_sz << " lotSz=" << spec.lot_sz
                   << " minSz=" << spec.min_sz << "\n";
 
-        const long long eth_usdt_inst_id_code = FetchInstIdCode(rest_client, auth, "ETH-USDT");
+        const long long eth_usdt_inst_id_code = FetchInstIdCode(rest_client, auth, kEthUsdt);
         std::cout << "ETH-USDT instIdCode=" << eth_usdt_inst_id_code << "\n";
 
         const OrderRequest order_request{
-            .inst_id = "ETH-USDT",
+            .inst_id = std::string(kEthUsdt),
             .side = std::string(kBuy),
             .ord_type = std::string(kLimit),
-            .px = "100",
-            .sz = "0.01",
+            .px = std::string(kSmokeTestPx),
+            .sz = std::string(kSmokeTestSz),
             .inst_id_code = eth_usdt_inst_id_code,
         };
         const OrderResult place_result = PlaceOrder(rest_client, auth, order_request);
@@ -99,17 +193,14 @@ int main() {
         }
 
         asio::io_context io_context;
-        OkxWsClient ws_client(io_context, "wspap.okx.com", "8443", "/ws/v5/public");
+        OkxWsClient ws_client(io_context, std::string(kOkxWsHost), std::string(kOkxWsPort),
+                              std::string(kPublicWsPath));
 
         OrderBook order_book;
 
-        const std::string subscribe_msg =
-            R"({"op":"subscribe","args":)"
-            R"([{"channel":"books","instId":"BTC-USDT"},{"channel":"trades","instId":"BTC-USDT"}]})";
-        const std::string books_unsubscribe_msg =
-            R"({"op":"unsubscribe","args":[{"channel":"books","instId":"BTC-USDT"}]})";
-        const std::string books_subscribe_msg =
-            R"({"op":"subscribe","args":[{"channel":"books","instId":"BTC-USDT"}]})";
+        const std::string subscribe_msg = std::format(kBooksSubscribeFormat, kBtcUsdt);
+        const std::string books_unsubscribe_msg = std::format(kBooksUnsubscribeFormat, kBtcUsdt);
+        const std::string books_subscribe_msg = std::format(kBooksResubscribeFormat, kBtcUsdt);
 
         ws_client.SetOnConnected([&ws_client, &subscribe_msg]() {
             ws_client.Send(subscribe_msg);
@@ -119,9 +210,7 @@ int main() {
                                 &books_subscribe_msg](std::string_view message) {
             switch (ApplyBookMessage(message, order_book)) {
                 case BookMessageResult::kApplied:
-                    std::cout << "book: bid=" << order_book.BestBid().value_or(0.0)
-                              << " ask=" << order_book.BestAsk().value_or(0.0)
-                              << " seqId=" << order_book.LastSeqId() << "\n";
+                    LogBookUpdate(order_book);
                     break;
                 case BookMessageResult::kGapDetected:
                     std::cerr << "Order book sequence gap detected — resubscribing for a fresh "
@@ -135,70 +224,31 @@ int main() {
             }
         });
 
-        OkxWsClient private_ws_client(io_context, "wspap.okx.com", "8443", "/ws/v5/private");
+        OkxWsClient private_ws_client(io_context, std::string(kOkxWsHost), std::string(kOkxWsPort),
+                                      std::string(kPrivateWsPath));
         AccountState account_state;
         WsResponseDemux ws_demux;
-
-        const std::string private_subscribe_msg =
-            R"({"op":"subscribe","args":)"
-            R"([{"channel":"orders","instType":"SPOT"},{"channel":"account"},)"
-            R"({"channel":"positions","instType":"ANY"}]})";
+        WsOrderRoundTrip order_round_trip(private_ws_client, ws_demux, order_request);
 
         private_ws_client.SetOnConnected([&private_ws_client, &auth]() {
             private_ws_client.Send(auth.BuildWsLoginMessage());
             std::cout << "sent private WS login request\n";
         });
 
-        private_ws_client.SetOnMessage([&private_ws_client, &private_subscribe_msg, &rest_client,
-                                        &auth, &account_state, &ws_demux, &order_request,
-                                        &eth_usdt_inst_id_code](std::string_view message) {
+        private_ws_client.SetOnMessage([&private_ws_client, &rest_client, &auth, &account_state,
+                                        &ws_demux, &order_round_trip](std::string_view message) {
             if (json::FindString(message, kEvent) == kLoginEvent) {
                 const auto code = json::FindString(message, kCode).value_or(kEmpty);
                 std::cout << "private WS login: code=" << code
                           << " msg=" << json::FindString(message, kMsg).value_or(kEmpty) << "\n";
                 if (code == kSuccessCode) {
-                    private_ws_client.Send(private_subscribe_msg);
+                    private_ws_client.Send(std::string(kPrivateSubscribeMsg));
                     std::cout << "sent orders/account/positions subscribe request\n";
 
                     const HttpResponse pending = GetPendingOrders(rest_client, auth);
                     std::cout << "pending orders reconciliation: " << pending.body << "\n";
 
-                    const WsOrderRequest ws_order = BuildWsOrderMessage(order_request);
-                    private_ws_client.Send(ws_order.message);
-                    std::cout << "sent WS order request id=" << ws_order.id << "\n";
-
-                    ws_demux.Track(ws_order.id, [&private_ws_client, &ws_demux, &order_request,
-                                                 &eth_usdt_inst_id_code](
-                                                    std::string_view response) {
-                        std::cout << "WS order response: " << response << "\n";
-                        const auto data = FindData(response);
-                        const auto ord_id = data ? json::FindString(*data, kOrdId) : std::nullopt;
-                        if (!ord_id) {
-                            return;
-                        }
-                        const std::string ord_id_str(*ord_id);
-
-                        const WsOrderRequest amend = BuildWsAmendOrderMessage(
-                            eth_usdt_inst_id_code, ord_id_str, "101", order_request.sz);
-                        private_ws_client.Send(amend.message);
-                        std::cout << "sent WS amend-order request id=" << amend.id << "\n";
-
-                        // NOLINTNEXTLINE(bugprone-exception-escape)
-                        ws_demux.Track(amend.id, [&private_ws_client, &ws_demux,
-                                                  &eth_usdt_inst_id_code,
-                                                  ord_id_str](std::string_view amend_response) {
-                            std::cout << "WS amend-order response: " << amend_response << "\n";
-                            const WsOrderRequest cancel =
-                                BuildWsCancelOrderMessage(eth_usdt_inst_id_code, ord_id_str);
-                            private_ws_client.Send(cancel.message);
-                            std::cout << "sent WS cancel-order request id=" << cancel.id << "\n";
-
-                            ws_demux.Track(cancel.id, [](std::string_view cancel_response) {
-                                std::cout << "WS cancel-order response: " << cancel_response
-                                          << "\n";
-                            });
-                        });
-                    });
+                    order_round_trip.Start();
                 }
                 return;
             }
@@ -209,19 +259,10 @@ int main() {
 
             const auto channel = json::FindString(message, kChannel);
             if (channel == kOrdersChannel) {
-                ForEachOrderEvent(message, [](const OrderEvent& event) {
-                    std::cout << "order event: type=" << ToString(event.type)
-                              << " ordId=" << event.ord_id << " instId=" << event.inst_id
-                              << " side=" << event.side << " px=" << event.px << " sz=" << event.sz
-                              << " accFillSz=" << event.acc_fill_sz << " avgPx=" << event.avg_px
-                              << "\n";
-                });
+                ForEachOrderEvent(message, LogOrderEvent);
             } else if (channel == kAccountChannel) {
                 account_state.ApplyMessage(message);
-                account_state.ForEachBalance([](const AccountState::Balance& balance) {
-                    std::cout << "account: ccy=" << balance.ccy << " cashBal=" << balance.cash_bal
-                              << " availBal=" << balance.avail_bal << "\n";
-                });
+                account_state.ForEachBalance(LogAccountBalance);
             } else {
                 std::cout << "private WS message: " << message << "\n";
             }
