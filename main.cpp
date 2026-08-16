@@ -86,11 +86,28 @@ long long ExtractTimestampMs(const std::string& public_time_body) {
 
 class WsOrderRoundTrip {
 public:
-    WsOrderRoundTrip(OkxWsClient& ws_client, WsResponseDemux& demux,
-                     const OrderRequest& order_request)
-        : ws_client_(ws_client), demux_(demux), order_request_(order_request) {}
+    WsOrderRoundTrip(OkxWsClient& ws_client, WsResponseDemux& demux, RestClient& rest_client,
+                     const OkxAuth& auth, const OrderRequest& order_request)
+        : ws_client_(ws_client),
+          demux_(demux),
+          rest_client_(rest_client),
+          auth_(auth),
+          order_request_(order_request) {}
 
     void Start() {
+        if (!ws_client_.IsConnected()) {
+            std::cout << "private WS down — falling back to REST for order placement\n";
+            const OrderResult result = PlaceOrder(rest_client_, auth_, order_request_);
+            std::cout << "REST fallback place order: accepted=" << result.accepted
+                      << " ordId=" << result.ord_id << " sCode=" << result.s_code
+                      << " sMsg=" << result.s_msg << "\n";
+            if (result.accepted) {
+                ord_id_ = result.ord_id;
+                FallBackToRestCancel();
+            }
+            return;
+        }
+
         const WsOrderRequest order = BuildWsOrderMessage(order_request_);
         ws_client_.Send(order.message);
         std::cout << "sent WS order request id=" << order.id << "\n";
@@ -107,6 +124,11 @@ private:
         }
         ord_id_ = std::string(*ord_id);
 
+        if (!ws_client_.IsConnected()) {
+            FallBackToRestCancel();
+            return;
+        }
+
         const WsOrderRequest amend = BuildWsAmendOrderMessage(order_request_.inst_id_code, ord_id_,
                                                               kSmokeTestAmendPx, order_request_.sz);
         ws_client_.Send(amend.message);
@@ -116,6 +138,11 @@ private:
 
     void OnAmendResponse(std::string_view response) {
         std::cout << "WS amend-order response: " << response << "\n";
+        if (!ws_client_.IsConnected()) {
+            FallBackToRestCancel();
+            return;
+        }
+
         const WsOrderRequest cancel =
             BuildWsCancelOrderMessage(order_request_.inst_id_code, ord_id_);
         ws_client_.Send(cancel.message);
@@ -127,8 +154,18 @@ private:
         std::cout << "WS cancel-order response: " << response << "\n";
     }
 
+    void FallBackToRestCancel() {
+        std::cout << "private WS down — falling back to REST for cancel\n";
+        const OrderResult result =
+            CancelOrder(rest_client_, auth_, order_request_.inst_id, ord_id_);
+        std::cout << "REST fallback cancel order: accepted=" << result.accepted
+                  << " sCode=" << result.s_code << " sMsg=" << result.s_msg << "\n";
+    }
+
     OkxWsClient& ws_client_;
     WsResponseDemux& demux_;
+    RestClient& rest_client_;
+    const OkxAuth& auth_;
     const OrderRequest& order_request_;
     std::string ord_id_;
 };
@@ -228,7 +265,8 @@ int main() {
                                       std::string(kPrivateWsPath));
         AccountState account_state;
         WsResponseDemux ws_demux;
-        WsOrderRoundTrip order_round_trip(private_ws_client, ws_demux, order_request);
+        WsOrderRoundTrip order_round_trip(private_ws_client, ws_demux, rest_client, auth,
+                                          order_request);
 
         private_ws_client.SetOnConnected([&private_ws_client, &auth]() {
             private_ws_client.Send(auth.BuildWsLoginMessage());

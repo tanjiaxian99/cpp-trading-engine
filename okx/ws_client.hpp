@@ -2,12 +2,12 @@
 
 #include <array>
 #include <chrono>
-#include <deque>
 #include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
 
+#include "net/ring_buffer.hpp"
 #include "net/transport.hpp"
 #include "net/websocket_frame.hpp"
 #include "net/websocket_reassembler.hpp"
@@ -25,16 +25,20 @@ public:
     void SetOnMessage(MessageHandler handler);
     void Start();
     void Send(std::string_view payload);
+    [[nodiscard]] bool IsConnected() const {
+        return transport_.has_value();
+    }
 
 private:
     static constexpr std::size_t kReadChunkSize = 4096;
     static constexpr std::size_t kMaxMessageSize = 1 << 20;
+    static constexpr std::size_t kTxRingCapacity = 1 << 14;
 
     void Connect();
     void ScheduleReconnect();
     void ReadLoop();
     void HandleFrame(const WebSocketFrame& frame);
-    void WriteRaw(std::string frame);
+    void WriteRaw(const std::string& frame);
     void StartWrite();
     void ScheduleHeartbeat();
 
@@ -50,9 +54,8 @@ private:
 
     std::array<char, kReadChunkSize> read_chunk_{};
     std::string rx_buffer_;
-    // std::vector can cause a reallocation and invalidate write_queue_.front(),
-    // so we use std::deque
-    std::deque<std::string> write_queue_;
+    RingBuffer<kTxRingCapacity> tx_ring_;
+    bool write_in_flight_ = false;
     WebSocketReassembler<kMaxMessageSize> reassembler_;
 
     ConnectHandler on_connected_;

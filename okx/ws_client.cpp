@@ -76,7 +76,8 @@ void OkxWsClient::Connect() {
 void OkxWsClient::ScheduleReconnect() {
     transport_.reset();
     heartbeat_timer_.cancel();
-    write_queue_.clear();
+    tx_ring_.Reset();
+    write_in_flight_ = false;
 
     const auto delay = ComputeBackoff(reconnect_attempt_);
     reconnect_attempt_++;
@@ -93,6 +94,10 @@ void OkxWsClient::ScheduleReconnect() {
 }
 
 void OkxWsClient::ReadLoop() {
+    if (!transport_) {
+        return;  // ScheduleReconnect reset the optional but will set it back soon
+    }
+
     transport_->AsyncReadSome(
         asio::buffer(read_chunk_), [this](const boost::system::error_code& ec, std::size_t n) {
             if (ec) {
@@ -138,26 +143,33 @@ void OkxWsClient::HandleFrame(const WebSocketFrame& frame) {
     }
 }
 
-void OkxWsClient::WriteRaw(std::string frame) {
-    write_queue_.push_back(std::move(frame));
-    if (write_queue_.size() == 1) {
-        StartWrite();  // Nothing in flight, so we can start sending
+void OkxWsClient::WriteRaw(const std::string& frame) {
+    tx_ring_.Write(frame);
+    if (!write_in_flight_) {
+        StartWrite();
     }
 }
 
 void OkxWsClient::StartWrite() {
-    auto on_write = [this](const boost::system::error_code& ec, std::size_t) {
+    if (!transport_) {
+        return;
+    }
+
+    write_in_flight_ = true;
+    auto on_write = [this](const boost::system::error_code& ec, std::size_t bytes_written) {
         if (ec) {
             std::cerr << "OKX WebSocket write error: " << ec.message() << "\n";
             ScheduleReconnect();
             return;
         }
-        write_queue_.pop_front();
-        if (!write_queue_.empty()) {
-            StartWrite();
+        tx_ring_.CommitRead(bytes_written);
+        if (tx_ring_.Size() > 0) {
+            StartWrite();  // More queued past this write, or past the wrap point
+        } else {
+            write_in_flight_ = false;
         }
     };
-    transport_->AsyncWrite(asio::buffer(write_queue_.front()), std::move(on_write));
+    transport_->AsyncWrite(tx_ring_.ContiguousReadableRegion(), std::move(on_write));
 }
 
 void OkxWsClient::ScheduleHeartbeat() {

@@ -333,8 +333,8 @@ reconciliation, cancel-all — which is what the Design table already claims it 
 - [x] `op: "cancel-order"`, `op: "amend-order"`; `batch-orders` for multi-leg requotes — **1.5 h**
 - [x] Response demux: match the ack's `id` back to the originating order, route to the
       state machine — **1.5 h**
-- [ ] TX path: encode into the engine-owned TX ring, mask, one `write()` — **1 h**
-- [ ] REST fallback when the private socket is down, behind the same risk checks — **1 h**
+- [x] TX path: encode into the engine-owned TX ring, mask, one `write()` — **1 h**
+- [x] REST fallback when the private socket is down, behind the same risk checks — **1 h**
 
 > This is what makes the tick-to-trade boundary honest. Over libcurl the send is a blocking
 > `curl_easy_perform` sitting at the end of the execution loop, so a sub-millisecond number
