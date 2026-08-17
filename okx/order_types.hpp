@@ -13,7 +13,5 @@ struct OrderRequest {
     long long inst_id_code = 0;
 };
 
-// Millisecond timestamp rendered as a string — unique enough for this
-// project's order volume, and satisfies OKX's clOrdId/WS "id" constraints
-// (alphanumeric only).
+// Monotonically increasing decimal
 std::string GenerateId();
