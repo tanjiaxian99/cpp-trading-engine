@@ -4,6 +4,7 @@
 #include <exception>
 #include <format>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
@@ -15,8 +16,10 @@
 #include "okx/okx_constants.hpp"
 #include "okx/order_book.hpp"
 #include "okx/order_events.hpp"
-#include "okx/orders.hpp"
+#include "okx/order_lifecycle.hpp"
+#include "okx/order_types.hpp"
 #include "okx/response_utils.hpp"
+#include "okx/rest_orders.hpp"
 #include "okx/ws_client.hpp"
 #include "okx/ws_orders.hpp"
 #include "okx/ws_response_demux.hpp"
@@ -68,6 +71,11 @@ void LogAccountBalance(const AccountState::Balance& balance) {
               << " availBal=" << balance.avail_bal << "\n";
 }
 
+bool IsRequestAccepted(std::string_view response) {
+    const auto data = FindData(response);
+    return data && json::FindString(*data, kSCode) == kSuccessCode;
+}
+
 // Extracts the server timestamp from /public/time's response, e.g.
 // {"code":"0","data":[{"ts":"1786204129995"}],"msg":""}, using the
 // general-purpose scanner (json::FindArrayElement + json::FindString)
@@ -109,12 +117,30 @@ public:
         }
 
         const WsOrderRequest order = BuildWsOrderMessage(order_request_);
+        order_.emplace(order.id, order_request_.inst_id, order_request_.side, order_request_.px,
+                       order_request_.sz);
         ws_client_.Send(order.message);
         std::cout << "sent WS order request id=" << order.id << "\n";
         demux_.Track(order.id, [this](std::string_view response) { OnOrderResponse(response); });
     }
 
+    void ApplyOrderEvent(const OrderEvent& event) {
+        if (!order_ || event.cl_ord_id != order_->ClOrdId()) {
+            return;
+        }
+
+        order_->ApplyEvent(event);
+        std::cout << "order state: " << ToString(order_->State()) << "\n";
+    }
+
 private:
+    Order& GetOrder() {
+        if (!order_) {
+            throw std::runtime_error("WsOrderRoundTrip: order_ unexpectedly empty");
+        }
+        return *order_;
+    }
+
     void OnOrderResponse(std::string_view response) {
         std::cout << "WS order response: " << response << "\n";
         const auto data = FindData(response);
@@ -129,6 +155,7 @@ private:
             return;
         }
 
+        GetOrder().OnAmendRequested();
         const WsOrderRequest amend = BuildWsAmendOrderMessage(order_request_.inst_id_code, ord_id_,
                                                               kSmokeTestAmendPx, order_request_.sz);
         ws_client_.Send(amend.message);
@@ -138,11 +165,17 @@ private:
 
     void OnAmendResponse(std::string_view response) {
         std::cout << "WS amend-order response: " << response << "\n";
+        if (!IsRequestAccepted(response)) {
+            GetOrder().OnRequestRejected();
+            std::cout << "order state: " << ToString(GetOrder().State()) << "\n";
+        }
+
         if (!ws_client_.IsConnected()) {
             FallBackToRestCancel();
             return;
         }
 
+        GetOrder().OnCancelRequested();
         const WsOrderRequest cancel =
             BuildWsCancelOrderMessage(order_request_.inst_id_code, ord_id_);
         ws_client_.Send(cancel.message);
@@ -152,6 +185,10 @@ private:
 
     void OnCancelResponse(std::string_view response) {
         std::cout << "WS cancel-order response: " << response << "\n";
+        if (!IsRequestAccepted(response)) {
+            GetOrder().OnRequestRejected();
+            std::cout << "order state: " << ToString(GetOrder().State()) << "\n";
+        }
     }
 
     void FallBackToRestCancel() {
@@ -168,6 +205,7 @@ private:
     const OkxAuth& auth_;
     const OrderRequest& order_request_;
     std::string ord_id_;
+    std::optional<Order> order_;
 };
 }  // namespace
 
@@ -297,7 +335,10 @@ int main() {
 
             const auto channel = json::FindString(message, kChannel);
             if (channel == kOrdersChannel) {
-                ForEachOrderEvent(message, LogOrderEvent);
+                ForEachOrderEvent(message, [&order_round_trip](const OrderEvent& event) {
+                    LogOrderEvent(event);
+                    order_round_trip.ApplyOrderEvent(event);
+                });
             } else if (channel == kAccountChannel) {
                 account_state.ApplyMessage(message);
                 account_state.ForEachBalance(LogAccountBalance);

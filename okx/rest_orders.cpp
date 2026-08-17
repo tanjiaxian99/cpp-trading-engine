@@ -1,6 +1,5 @@
-#include "okx/orders.hpp"
+#include "okx/rest_orders.hpp"
 
-#include <chrono>
 #include <format>
 #include <optional>
 #include <stdexcept>
@@ -50,13 +49,6 @@ OrderResult ParseOrderResult(const HttpResponse& response) {
     return result;
 }
 }  // namespace
-
-std::string GenerateId() {
-    const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::chrono::system_clock::now().time_since_epoch())
-                            .count();
-    return std::to_string(now_ms);
-}
 
 OrderResult PlaceOrder(RestClient& rest_client, const OkxAuth& auth, const OrderRequest& request) {
     if (request.ord_type == kMarket) {

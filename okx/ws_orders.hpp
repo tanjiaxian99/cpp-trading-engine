@@ -4,7 +4,7 @@
 #include <string_view>
 #include <vector>
 
-#include "okx/orders.hpp"
+#include "okx/order_types.hpp"
 
 struct WsOrderRequest {
     std::string id;

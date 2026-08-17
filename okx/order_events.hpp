@@ -5,7 +5,7 @@
 #include <string_view>
 
 enum class OrderEventType : std::uint8_t {
-    kAck,
+    kLive,
     kPartialFill,
     kFill,
     kReject,

@@ -352,7 +352,7 @@ reconciliation, cancel-all — which is what the Design table already claims it 
 
 ### B5 · Order lifecycle — 6–8 h
 
-- [ ] State machine: `PendingNew → New → PartiallyFilled → Filled | Canceled | Rejected`,
+- [x] State machine: `PendingNew → New → PartiallyFilled → Filled | Canceled | Rejected`,
       plus `PendingCancel` / `PendingReplace` — **2.5 h**
 - [ ] `clOrdId` generation: monotonic, unique across restarts, alphanumeric ≤32 chars — **1 h**
 - [ ] Order store: pre-allocated slab + id→slot index, no per-order allocation — **1.5 h**

@@ -9,7 +9,7 @@
 namespace {
 OrderEventType ClassifyState(std::string_view state) {
     if (state == kStateLive) {
-        return OrderEventType::kAck;
+        return OrderEventType::kLive;
     }
     if (state == kStatePartiallyFilled) {
         return OrderEventType::kPartialFill;
@@ -53,8 +53,8 @@ void ForEachOrderEvent(std::string_view message,
 
 std::string_view ToString(OrderEventType type) {
     switch (type) {
-        case OrderEventType::kAck:
-            return "ack";
+        case OrderEventType::kLive:
+            return "live";
         case OrderEventType::kPartialFill:
             return "partial-fill";
         case OrderEventType::kFill:
