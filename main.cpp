@@ -19,6 +19,7 @@
 #include "okx/order_lifecycle.hpp"
 #include "okx/order_store.hpp"
 #include "okx/order_types.hpp"
+#include "okx/reconciliation.hpp"
 #include "okx/response_utils.hpp"
 #include "okx/rest_orders.hpp"
 #include "okx/ws_client.hpp"
@@ -96,12 +97,14 @@ long long ExtractTimestampMs(const std::string& public_time_body) {
 class WsOrderRoundTrip {
 public:
     WsOrderRoundTrip(OkxWsClient& ws_client, WsResponseDemux& demux, RestClient& rest_client,
-                     const OkxAuth& auth, const OrderRequest& order_request)
+                     const OkxAuth& auth, const OrderRequest& order_request,
+                     OrderStore& order_store)
         : ws_client_(ws_client),
           demux_(demux),
           rest_client_(rest_client),
           auth_(auth),
-          order_request_(order_request) {}
+          order_request_(order_request),
+          order_store_(order_store) {}
 
     void Start() {
         if (!ws_client_.IsConnected()) {
@@ -213,7 +216,7 @@ private:
     const OrderRequest& order_request_;
     std::string ord_id_;
     std::string cl_ord_id_;
-    OrderStore order_store_;
+    OrderStore& order_store_;
 };
 }  // namespace
 
@@ -311,8 +314,9 @@ int main() {
                                       std::string(kPrivateWsPath));
         AccountState account_state;
         WsResponseDemux ws_demux;
+        OrderStore order_store;
         WsOrderRoundTrip order_round_trip(private_ws_client, ws_demux, rest_client, auth,
-                                          order_request);
+                                          order_request, order_store);
 
         private_ws_client.SetOnConnected([&private_ws_client, &auth]() {
             private_ws_client.Send(auth.BuildWsLoginMessage());
@@ -320,7 +324,8 @@ int main() {
         });
 
         private_ws_client.SetOnMessage([&private_ws_client, &rest_client, &auth, &account_state,
-                                        &ws_demux, &order_round_trip](std::string_view message) {
+                                        &ws_demux, &order_round_trip,
+                                        &order_store](std::string_view message) {
             if (json::FindString(message, kEvent) == kLoginEvent) {
                 const auto code = json::FindString(message, kCode).value_or(kEmpty);
                 std::cout << "private WS login: code=" << code
@@ -331,6 +336,7 @@ int main() {
 
                     const HttpResponse pending = GetPendingOrders(rest_client, auth);
                     std::cout << "pending orders reconciliation: " << pending.body << "\n";
+                    ReconcileOrders(order_store, pending.body);
 
                     order_round_trip.Start();
                 }

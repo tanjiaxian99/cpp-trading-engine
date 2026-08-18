@@ -356,7 +356,7 @@ reconciliation, cancel-all — which is what the Design table already claims it 
       plus `PendingCancel` / `PendingReplace` — **2.5 h**
 - [x] `clOrdId` generation: monotonic, unique across restarts, alphanumeric ≤32 chars — **1 h**
 - [x] Order store: pre-allocated slab + id→slot index, no per-order allocation — **1.5 h**
-- [ ] Reconciliation: diff local state vs exchange, resolve divergence — **2 h**
+- [x] Reconciliation: diff local state vs exchange, resolve divergence — **2 h**
 - [ ] Timeouts for unacknowledged orders — **1 h**
 
 ### B6 · Risk — 3–4 h

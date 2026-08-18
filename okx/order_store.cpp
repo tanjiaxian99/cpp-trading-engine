@@ -32,6 +32,12 @@ void OrderStore::Remove(std::string_view cl_ord_id) {
     count_--;
 }
 
+void OrderStore::ForEach(const std::function<void(Order&)>& action) {
+    for (std::size_t i = 0; i < count_; i++) {
+        action(At(i));
+    }
+}
+
 Order* OrderStore::FindByClOrdId(std::string_view cl_ord_id) {
     const std::size_t i = LowerBound(cl_ord_id);
     if (i < count_ && At(i).ClOrdId() == cl_ord_id) {
