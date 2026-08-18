@@ -18,6 +18,7 @@
 #include "okx/order_events.hpp"
 #include "okx/order_lifecycle.hpp"
 #include "okx/order_store.hpp"
+#include "okx/order_timeout_monitor.hpp"
 #include "okx/order_types.hpp"
 #include "okx/reconciliation.hpp"
 #include "okx/response_utils.hpp"
@@ -317,6 +318,8 @@ int main() {
         OrderStore order_store;
         WsOrderRoundTrip order_round_trip(private_ws_client, ws_demux, rest_client, auth,
                                           order_request, order_store);
+        OrderTimeoutMonitor order_timeout_monitor(io_context, order_store, rest_client, auth);
+        order_timeout_monitor.Start();
 
         private_ws_client.SetOnConnected([&private_ws_client, &auth]() {
             private_ws_client.Send(auth.BuildWsLoginMessage());

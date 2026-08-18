@@ -31,6 +31,11 @@ bool IsTerminal(OrderState state) {
            state == OrderState::kRejected;
 }
 
+bool IsPending(OrderState state) {
+    return state == OrderState::kPendingNew || state == OrderState::kPendingCancel ||
+           state == OrderState::kPendingAmend;
+}
+
 Order::Order(std::string cl_ord_id, std::string inst_id, std::string side, std::string px,
              std::string sz)
     : cl_ord_id_(std::move(cl_ord_id)),
@@ -117,6 +122,7 @@ void Order::OnCancelRequested() {
     if (state_ != OrderState::kPendingAmend) {
         pre_pending_state_ = state_;
     }
+    pending_since_ = std::chrono::steady_clock::now();
     TransitionTo(OrderState::kPendingCancel);
 }
 
@@ -130,6 +136,7 @@ void Order::OnAmendRequested() {
     if (state_ != OrderState::kPendingCancel) {
         pre_pending_state_ = state_;
     }
+    pending_since_ = std::chrono::steady_clock::now();
     TransitionTo(OrderState::kPendingAmend);
 }
 

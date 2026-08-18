@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <string>
 #include <string_view>
 
@@ -18,6 +19,7 @@ enum class OrderState : std::uint8_t {
 
 [[nodiscard]] std::string_view ToString(OrderState state);
 [[nodiscard]] bool IsTerminal(OrderState state);
+[[nodiscard]] bool IsPending(OrderState state);
 
 class Order {
 public:
@@ -53,6 +55,9 @@ public:
     [[nodiscard]] const std::string& AvgPx() const {
         return avg_px_;
     }
+    [[nodiscard]] std::chrono::steady_clock::time_point PendingSince() const {
+        return pending_since_;
+    }
 
 private:
     void TransitionTo(OrderState next);
@@ -69,4 +74,5 @@ private:
     OrderState state_ = OrderState::kPendingNew;
     // Revert to this state if the in-flight cancel/amend request is rejected
     OrderState pre_pending_state_ = OrderState::kPendingNew;
+    std::chrono::steady_clock::time_point pending_since_ = std::chrono::steady_clock::now();
 };

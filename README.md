@@ -13,29 +13,29 @@ claimed latency.
 
 **Early development. Not yet functional.**
 
-| Milestone | Scope | State |
-|---|---|---|
-| A | Signed REST order entry — place, fill, cancel | Not started |
-| B | Async engine: WebSocket feed, order lifecycle, risk, strategy | Not started |
-| C | Order book implementations and benchmarks | Not started |
-| D | Optional upgrades | — |
+| Milestone | Scope                                                         | State       |
+|-----------|---------------------------------------------------------------|-------------|
+| A         | Signed REST order entry — place, fill, cancel                 | Not started |
+| B         | Async engine: WebSocket feed, order lifecycle, risk, strategy | Not started |
+| C         | Order book implementations and benchmarks                     | Not started |
+| D         | Optional upgrades                                             | —           |
 
 ## Design
 
 The engine leans on libraries for solved, generic infrastructure and implements everything
 specific to exchange connectivity and market data itself.
 
-| Layer | Implementation |
-|---|---|
-| Readiness notification, timers | **Boost.Asio** — reactor only |
-| TLS transport | **`asio::ssl::stream`** over OpenSSL |
-| REST (cold path) | **libcurl** — startup, reconnect, cancel-all |
-| HMAC-SHA256, base64 | **OpenSSL** |
-| **WebSocket framing (RFC 6455)** | In-tree — handshake, frame codec, masking, continuation |
-| **Receive buffering, in-place parsing** | In-tree — decode off the read buffer, no DOM |
-| **Order books, sequencing, gap recovery** | In-tree — pre-allocated, zero hot-path allocation |
-| **Order lifecycle, reconciliation, risk** | In-tree |
-| **Slabs, ring buffers, SPSC queue, measurement** | In-tree |
+| Layer                                            | Implementation                                          |
+|--------------------------------------------------|---------------------------------------------------------|
+| Readiness notification, timers                   | **Boost.Asio** — reactor only                           |
+| TLS transport                                    | **`asio::ssl::stream`** over OpenSSL                    |
+| REST (cold path)                                 | **libcurl** — startup, reconnect, cancel-all            |
+| HMAC-SHA256, base64                              | **OpenSSL**                                             |
+| **WebSocket framing (RFC 6455)**                 | In-tree — handshake, frame codec, masking, continuation |
+| **Receive buffering, in-place parsing**          | In-tree — decode off the read buffer, no DOM            |
+| **Order books, sequencing, gap recovery**        | In-tree — pre-allocated, zero hot-path allocation       |
+| **Order lifecycle, reconciliation, risk**        | In-tree                                                 |
+| **Slabs, ring buffers, SPSC queue, measurement** | In-tree                                                 |
 
 Two deliberate choices worth stating:
 
@@ -119,10 +119,10 @@ rejects. Credentials are never read from files inside the repository.
 Not yet measured. Results will be reported as p50 / p99 / p99.9 / max with the measurement
 boundary stated — never as averages.
 
-| Metric | Boundary | p50 | p99 | p99.9 | max |
-|---|---|---|---|---|---|
-| Tick-to-trade | socket read return → order bytes at `write()` | — | — | — | — |
-| Book update | frame decoded → book consistent | — | — | — | — |
+| Metric        | Boundary                                      | p50 | p99 | p99.9 | max |
+|---------------|-----------------------------------------------|-----|-----|-------|-----|
+| Tick-to-trade | socket read return → order bytes at `write()` | —   | —   | —     | —   |
+| Book update   | frame decoded → book consistent               | —   | —   | —     | —   |
 
 ---
 
@@ -152,10 +152,10 @@ and cancelled. Synchronous and ugly is fine.
 
 - [x] Toolchain: Xcode Command Line Tools (clang, included), `brew install cmake ninja boost` — **0.5 h**
 - [x] `openssl@3` via Homebrew; point CMake at it explicitly since macOS does not put it
-      on the default include/lib path (`-DOPENSSL_ROOT_DIR`) — **0.5 h**
+  on the default include/lib path (`-DOPENSSL_ROOT_DIR`) — **0.5 h**
 - [x] Repo skeleton + CMake presets: `debug`, `asan+ubsan`, `release` (`-O2 -march=native`) — **1.5 h**
 - [x] OKX account → Assets → Start Demo Trading → Personal Center → Demo Trading API →
-      create a V5 demo key. Record key / secret / **passphrase**; wire up env loading — **1 h**
+  create a V5 demo key. Record key / secret / **passphrase**; wire up env loading — **1 h**
 - [x] *(optional)* GitHub Actions: build + test on push — **1 h**
 
 ### A1 · Transport (Asio reactor) — 2–3 h
@@ -196,9 +196,9 @@ sign    = base64( HMAC_SHA256(prehash, secret) )
 - [x] ISO 8601 UTC timestamp with millisecond precision, `...Z` suffix — **0.5 h**
 - [x] HMAC-SHA256 + base64 encoding via OpenSSL `EVP` — **1 h**
 - [x] Prehash assembly — method uppercased, query string included in `requestPath`,
-      body byte-identical to what is actually sent — **1 h**
+  body byte-identical to what is actually sent — **1 h**
 - [x] Headers via `curl_slist`: `OK-ACCESS-KEY`, `OK-ACCESS-SIGN`, `OK-ACCESS-TIMESTAMP`,
-      `OK-ACCESS-PASSPHRASE`, plus the `x-simulated-trading: 1` guard — **0.5 h**
+  `OK-ACCESS-PASSPHRASE`, plus the `x-simulated-trading: 1` guard — **0.5 h**
 - [x] Signed `GET /api/v5/account/balance`, parse it — **1.5 h**
 - [x] Clock drift check against `GET /api/v5/public/time` — **0.5 h**
 
@@ -211,9 +211,9 @@ sign    = base64( HMAC_SHA256(prehash, secret) )
 
 - [x] Targeted JSON field scanner — locate key, extract number/string in place, no DOM — **2 h**
 - [x] Instrument specs from `GET /api/v5/public/instruments?instType=SPOT`:
-      `tickSz`, `lotSz`, `minSz` — **1.5 h**
+  `tickSz`, `lotSz`, `minSz` — **1.5 h**
 - [x] `POST /api/v5/trade/order` — `instId`, `tdMode: "cash"`, `side`, `ordType`, `px`,
-      `sz`, `clOrdId` — **2 h**
+  `sz`, `clOrdId` — **2 h**
 - [x] `POST /api/v5/trade/cancel-order`, `GET /api/v5/trade/orders-pending` — **1 h**
 - [x] Two-level response envelope handling — **1 h**
 
@@ -247,18 +247,18 @@ kill switch.
 Written from RFC 6455.
 
 - [x] Fixed-capacity RX/TX ring buffers behind Asio's read/write, engine-owned so parsing can
-      happen in place off them — **1 h**
+  happen in place off them — **1 h**
 - [x] Handshake: random `Sec-WebSocket-Key`, base64, verify `Sec-WebSocket-Accept` — **2 h**
 - [x] Frame decoder: FIN/opcode, 7 / 16 / 64-bit payload lengths — **3.5 h**
 - [x] Frame encoder with mandatory client-side masking — **1.5 h**
 - [x] Control frames: ping/pong, close handshake — **1.5 h**
 - [x] OKX application-level heartbeat: send the literal text `ping`, expect `pong`.
-      The connection drops after 30 s of silence, so run a <30 s timer — **0.5 h**
+  The connection drops after 30 s of silence, so run a <30 s timer — **0.5 h**
 - [x] Continuation-frame reassembly into a fixed-capacity per-connection buffer, sized for the
-      largest expected message; a message that overflows it closes the connection rather than
-      falling back to the heap — **1.5 h**
+  largest expected message; a message that overflows it closes the connection rather than
+  falling back to the heap — **1.5 h**
 - [x] Drive the codec from Asio completion handlers; reconnect with exponential backoff
-      + jitter via `asio::steady_timer` — **1.5 h**
+  + jitter via `asio::steady_timer` — **1.5 h**
 
 > OKX's heartbeat is a *text frame containing the word* `ping`, distinct from the RFC 6455
 > ping opcode. Both are required — the protocol-level control frames and the application-level
@@ -276,7 +276,7 @@ Written from RFC 6455.
 
 - [x] Subscribe to the `books` and `trades` channels on the public endpoint — **1 h**
 - [x] Snapshot + incremental application, sequenced by `seqId` / `prevSeqId`
-      (`prevSeqId` is `-1` on the initial snapshot) — **2.5 h**
+  (`prevSeqId` is `-1` on the initial snapshot) — **2.5 h**
 - [x] Pre-allocated L2 book: fixed-size sorted arrays, zero allocation on update — **2.5 h**
 - [x] Gap detection (`prevSeqId` ≠ last `seqId`) → resubscribe for a fresh snapshot — **1 h**
 - [x] *(if still present)* CRC32 `checksum` validation against the local book — **1 h**
@@ -312,13 +312,13 @@ Order and account updates arrive over an authenticated WebSocket session rather 
 polled or keepalive-maintained REST token.
 
 - [x] WS login: `op: "login"` with `apiKey` / `passphrase` / `timestamp` / `sign`.
-      Timestamp here is **Unix epoch seconds as a string** — *not* the ISO 8601 format used
-      for REST. Prehash is `timestamp + "GET" + "/users/self/verify"`. Expires after 30 s — **1.5 h**
+  Timestamp here is **Unix epoch seconds as a string** — *not* the ISO 8601 format used
+  for REST. Prehash is `timestamp + "GET" + "/users/self/verify"`. Expires after 30 s — **1.5 h**
 - [x] Subscribe to `orders`, `account`, `positions` — **1 h**
 - [x] `orders` channel → normalized ack / partial-fill / fill / reject events — **2 h**
 - [x] `account` channel → balance and position tracking — **1 h**
 - [x] On reconnect: re-login, resubscribe, reconcile against
-      `GET /api/v5/trade/orders-pending` — **1.5 h**
+  `GET /api/v5/trade/orders-pending` — **1.5 h**
 
 > Two different timestamp formats and two different prehash strings for REST vs WebSocket
 > auth is the single most common OKX integration bug. Write both signers side by side in one
@@ -332,7 +332,7 @@ reconciliation, cancel-all — which is what the Design table already claims it 
 - [x] `op: "order"` request framing, `id` field generated and correlated to `clOrdId` — **2 h**
 - [x] `op: "cancel-order"`, `op: "amend-order"`; `batch-orders` for multi-leg requotes — **1.5 h**
 - [x] Response demux: match the ack's `id` back to the originating order, route to the
-      state machine — **1.5 h**
+  state machine — **1.5 h**
 - [x] TX path: encode into the engine-owned TX ring, mask, one `write()` — **1 h**
 - [x] REST fallback when the private socket is down, behind the same risk checks — **1 h**
 
@@ -353,11 +353,11 @@ reconciliation, cancel-all — which is what the Design table already claims it 
 ### B5 · Order lifecycle — 6–8 h
 
 - [x] State machine: `PendingNew → New → PartiallyFilled → Filled | Canceled | Rejected`,
-      plus `PendingCancel` / `PendingReplace` — **2.5 h**
+  plus `PendingCancel` / `PendingReplace` — **2.5 h**
 - [x] `clOrdId` generation: monotonic, unique across restarts, alphanumeric ≤32 chars — **1 h**
 - [x] Order store: pre-allocated slab + id→slot index, no per-order allocation — **1.5 h**
 - [x] Reconciliation: diff local state vs exchange, resolve divergence — **2 h**
-- [ ] Timeouts for unacknowledged orders — **1 h**
+- [x] Timeouts for unacknowledged orders — **1 h**
 
 ### B6 · Risk — 3–4 h
 
@@ -370,7 +370,7 @@ reconciliation, cancel-all — which is what the Design table already claims it 
 - [ ] Strategy interface: `on_book_update`, `on_fill`, `on_reject`, `on_timer` — **1 h**
 - [ ] Naive quoter: post bid/ask at ±k bps, requote when mid moves past a threshold — **3 h**
 - [ ] Cancel/replace logic, per-endpoint token-bucket rate limiter (OKX limits are
-      per-endpoint requests-per-2s, not a global weight budget) — **2 h**
+  per-endpoint requests-per-2s, not a global weight budget) — **2 h**
 - [ ] Run it live for several hours; fix everything that breaks — **2 h**
 
 ### B8 · Observability — 3–4 h
@@ -402,13 +402,13 @@ reconciliation, cancel-all — which is what the Design table already claims it 
 The point is a **bench harness** that replays one identical message stream through several
 book implementations and reports latency percentiles for each.
 
-| Impl | Structure | Purpose |
-|---|---|---|
-| 1 | `std::map<Price, Qty>` + `unordered_map<OrderId, Ref>` | Correctness oracle, baseline |
-| 2 | Sorted `std::vector<Level>` | Cache locality; usually beats the map several-fold |
-| 3 | Price-indexed ladder + occupancy bitset | O(1) update, O(1) top-of-book |
-| 4 | Hybrid: hot ladder window + cold map | Handles wide price ranges |
-| 5 | Order-by-order: id hash → intrusive FIFO list per level | Queue position |
+| Impl | Structure                                               | Purpose                                            |
+|------|---------------------------------------------------------|----------------------------------------------------|
+| 1    | `std::map<Price, Qty>` + `unordered_map<OrderId, Ref>`  | Correctness oracle, baseline                       |
+| 2    | Sorted `std::vector<Level>`                             | Cache locality; usually beats the map several-fold |
+| 3    | Price-indexed ladder + occupancy bitset                 | O(1) update, O(1) top-of-book                      |
+| 4    | Hybrid: hot ladder window + cold map                    | Handles wide price ranges                          |
+| 5    | Order-by-order: id hash → intrusive FIFO list per level | Queue position                                     |
 
 Query specializations to support and measure:
 
@@ -438,13 +438,13 @@ order-by-order. Deterministic and large, so the benchmarks are reproducible.
 
 # Effort summary
 
-| Phase | Hours | At 10 h/week |
-|---|---|---|
-| A — first real order | 15–21 | 2 weeks |
-| B — live lifecycle | 43–62 | 4–6 weeks |
+| Phase                           | Hours     | At 10 h/week  |
+|---------------------------------|-----------|---------------|
+| A — first real order            | 15–21     | 2 weeks       |
+| B — live lifecycle              | 43–62     | 4–6 weeks     |
 | **A + B (first trading build)** | **58–83** | **6–8 weeks** |
-| C — order book work | 35–45 | 4 weeks |
-| D — upgrades | optional | — |
+| C — order book work             | 35–45     | 4 weeks       |
+| D — upgrades                    | optional  | —             |
 
 The top of that range assumes every task independently hits its worst case, which does not
 happen in practice. Plan around **~68 hours** for A + B and treat 83 as the tail.
