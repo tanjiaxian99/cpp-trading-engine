@@ -52,6 +52,7 @@ add_executable(trading_engine main.cpp config.hpp
         okx/order_book.hpp okx/order_book.cpp okx/market_data.hpp okx/market_data.cpp
         okx/order_events.hpp okx/order_events.cpp
         okx/order_lifecycle.hpp okx/order_lifecycle.cpp
+        okx/order_store.hpp okx/order_store.cpp
         okx/account_state.hpp okx/account_state.cpp
         util/json.hpp util/json.cpp util/base64.hpp util/base64.cpp
         util/sha1.hpp util/sha1.cpp)

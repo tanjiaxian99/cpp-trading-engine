@@ -17,6 +17,7 @@
 #include "okx/order_book.hpp"
 #include "okx/order_events.hpp"
 #include "okx/order_lifecycle.hpp"
+#include "okx/order_store.hpp"
 #include "okx/order_types.hpp"
 #include "okx/response_utils.hpp"
 #include "okx/rest_orders.hpp"
@@ -117,28 +118,34 @@ public:
         }
 
         const WsOrderRequest order = BuildWsOrderMessage(order_request_);
-        order_.emplace(order.id, order_request_.inst_id, order_request_.side, order_request_.px,
-                       order_request_.sz);
+        cl_ord_id_ = order.id;
+        order_store_.Add(order.id, order_request_.inst_id, order_request_.side, order_request_.px,
+                         order_request_.sz);
         ws_client_.Send(order.message);
         std::cout << "sent WS order request id=" << order.id << "\n";
         demux_.Track(order.id, [this](std::string_view response) { OnOrderResponse(response); });
     }
 
     void ApplyOrderEvent(const OrderEvent& event) {
-        if (!order_ || event.cl_ord_id != order_->ClOrdId()) {
+        Order* order = order_store_.FindByClOrdId(event.cl_ord_id);
+        if (!order) {
             return;
         }
 
-        order_->ApplyEvent(event);
-        std::cout << "order state: " << ToString(order_->State()) << "\n";
+        order->ApplyEvent(event);
+        std::cout << "order state: " << ToString(order->State()) << "\n";
+        if (IsTerminal(order->State())) {
+            order_store_.Remove(order->ClOrdId());
+        }
     }
 
 private:
     Order& GetOrder() {
-        if (!order_) {
-            throw std::runtime_error("WsOrderRoundTrip: order_ unexpectedly empty");
+        Order* order = order_store_.FindByClOrdId(cl_ord_id_);
+        if (!order) {
+            throw std::runtime_error("WsOrderRoundTrip: order not found in order_store_");
         }
-        return *order_;
+        return *order;
     }
 
     void OnOrderResponse(std::string_view response) {
@@ -205,7 +212,8 @@ private:
     const OkxAuth& auth_;
     const OrderRequest& order_request_;
     std::string ord_id_;
-    std::optional<Order> order_;
+    std::string cl_ord_id_;
+    OrderStore order_store_;
 };
 }  // namespace
 

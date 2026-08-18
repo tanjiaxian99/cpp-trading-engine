@@ -26,6 +26,11 @@ std::string_view ToString(OrderState state) {
     throw std::runtime_error("Unrecognized OrderState");
 }
 
+bool IsTerminal(OrderState state) {
+    return state == OrderState::kFilled || state == OrderState::kCanceled ||
+           state == OrderState::kRejected;
+}
+
 Order::Order(std::string cl_ord_id, std::string inst_id, std::string side, std::string px,
              std::string sz)
     : cl_ord_id_(std::move(cl_ord_id)),
@@ -104,21 +109,27 @@ void Order::ApplyEvent(const OrderEvent& event) {
 
 void Order::OnCancelRequested() {
     if (state_ != OrderState::kPendingNew && state_ != OrderState::kNew &&
-        state_ != OrderState::kPartiallyFilled) {
+        state_ != OrderState::kPartiallyFilled && state_ != OrderState::kPendingAmend) {
         throw std::runtime_error(
             std::format("Order {}: cancel requested from state {}", cl_ord_id_, ToString(state_)));
     }
-    pre_pending_state_ = state_;
+
+    if (state_ != OrderState::kPendingAmend) {
+        pre_pending_state_ = state_;
+    }
     TransitionTo(OrderState::kPendingCancel);
 }
 
 void Order::OnAmendRequested() {
     if (state_ != OrderState::kPendingNew && state_ != OrderState::kNew &&
-        state_ != OrderState::kPartiallyFilled) {
+        state_ != OrderState::kPartiallyFilled && state_ != OrderState::kPendingCancel) {
         throw std::runtime_error(
             std::format("Order {}: amend requested from state {}", cl_ord_id_, ToString(state_)));
     }
-    pre_pending_state_ = state_;
+
+    if (state_ != OrderState::kPendingCancel) {
+        pre_pending_state_ = state_;
+    }
     TransitionTo(OrderState::kPendingAmend);
 }
 

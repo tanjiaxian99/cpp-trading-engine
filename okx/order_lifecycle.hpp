@@ -17,6 +17,7 @@ enum class OrderState : std::uint8_t {
 };
 
 [[nodiscard]] std::string_view ToString(OrderState state);
+[[nodiscard]] bool IsTerminal(OrderState state);
 
 class Order {
 public:
