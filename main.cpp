@@ -1,6 +1,7 @@
 #include <boost/asio.hpp>
 
 #include <chrono>
+#include <csignal>
 #include <exception>
 #include <format>
 #include <iostream>
@@ -12,6 +13,7 @@
 #include "okx/account_state.hpp"
 #include "okx/auth.hpp"
 #include "okx/instrument.hpp"
+#include "okx/kill_switch.hpp"
 #include "okx/market_data.hpp"
 #include "okx/okx_constants.hpp"
 #include "okx/order_book.hpp"
@@ -20,9 +22,11 @@
 #include "okx/order_store.hpp"
 #include "okx/order_timeout_monitor.hpp"
 #include "okx/order_types.hpp"
+#include "okx/position.hpp"
 #include "okx/reconciliation.hpp"
 #include "okx/response_utils.hpp"
 #include "okx/rest_orders.hpp"
+#include "okx/risk.hpp"
 #include "okx/ws_client.hpp"
 #include "okx/ws_orders.hpp"
 #include "okx/ws_response_demux.hpp"
@@ -56,6 +60,14 @@ constexpr std::string_view kPrivateSubscribeMsg =
     R"({"op":"subscribe","args":)"
     R"([{"channel":"orders","instType":"SPOT"},{"channel":"account"},)"
     R"({"channel":"positions","instType":"ANY"}]})";
+
+constexpr RiskLimits kRiskLimits{
+    .max_order_sz = 1.0,
+    .max_notional = 1000.0,
+    .price_collar_pct = 0.05,
+    .max_open_orders = 10,
+};
+constexpr double kMaxRealizedLoss = 50.0;
 
 void LogBookUpdate(const OrderBook& book) {
     std::cout << "book: bid=" << book.BestBid().value_or(0.0)
@@ -320,6 +332,18 @@ int main() {
                                           order_request, order_store);
         OrderTimeoutMonitor order_timeout_monitor(io_context, order_store, rest_client, auth);
         order_timeout_monitor.Start();
+        KillSwitch kill_switch(rest_client, auth, order_store);
+        Position position;
+
+        asio::signal_set shutdown_signals(io_context, SIGINT, SIGTERM);
+        shutdown_signals.async_wait(
+            [&io_context, &kill_switch](const boost::system::error_code& ec, int) {
+                if (ec) {
+                    return;
+                }
+                kill_switch.Trigger("manual (signal)");
+                io_context.stop();
+            });
 
         private_ws_client.SetOnConnected([&private_ws_client, &auth]() {
             private_ws_client.Send(auth.BuildWsLoginMessage());
@@ -327,8 +351,8 @@ int main() {
         });
 
         private_ws_client.SetOnMessage([&private_ws_client, &rest_client, &auth, &account_state,
-                                        &ws_demux, &order_round_trip,
-                                        &order_store](std::string_view message) {
+                                        &ws_demux, &order_round_trip, &order_store, &kill_switch,
+                                        &position, &order_request](std::string_view message) {
             if (json::FindString(message, kEvent) == kLoginEvent) {
                 const auto code = json::FindString(message, kCode).value_or(kEmpty);
                 std::cout << "private WS login: code=" << code
@@ -341,7 +365,18 @@ int main() {
                     std::cout << "pending orders reconciliation: " << pending.body << "\n";
                     ReconcileOrders(order_store, pending.body);
 
-                    order_round_trip.Start();
+                    if (kill_switch.IsTriggered()) {
+                        std::cout << "Kill switch is triggered so we will skip order placement\n";
+                    } else {
+                        const RiskCheckResult risk_check = CheckPreTradeRisk(
+                            kRiskLimits, order_request, order_store, std::nullopt);
+                        if (!risk_check.passed) {
+                            std::cout << "Pre-trade risk check failed: " << risk_check.reason
+                                      << "\n";
+                        } else {
+                            order_round_trip.Start();
+                        }
+                    }
                 }
                 return;
             }
@@ -352,10 +387,23 @@ int main() {
 
             const auto channel = json::FindString(message, kChannel);
             if (channel == kOrdersChannel) {
-                ForEachOrderEvent(message, [&order_round_trip](const OrderEvent& event) {
-                    LogOrderEvent(event);
-                    order_round_trip.ApplyOrderEvent(event);
-                });
+                ForEachOrderEvent(
+                    message, [&order_round_trip, &position, &kill_switch](const OrderEvent& event) {
+                        LogOrderEvent(event);
+                        order_round_trip.ApplyOrderEvent(event);
+
+                        if (event.type == OrderEventType::kFill ||
+                            event.type == OrderEventType::kPartialFill) {
+                            position.ApplyFill(event.side, json::ParseDouble(event.fill_px),
+                                               json::ParseDouble(event.fill_sz));
+                            std::cout << "Position: netQty=" << position.NetQty()
+                                      << " avgEntryPx=" << position.AvgEntryPx()
+                                      << " realizedPnl=" << position.RealizedPnl() << "\n";
+                            if (position.RealizedPnl() < -kMaxRealizedLoss) {
+                                kill_switch.Trigger("max realized loss breached");
+                            }
+                        }
+                    });
             } else if (channel == kAccountChannel) {
                 account_state.ApplyMessage(message);
                 account_state.ForEachBalance(LogAccountBalance);

@@ -55,6 +55,9 @@ add_executable(trading_engine main.cpp config.hpp
         okx/order_store.hpp okx/order_store.cpp
         okx/reconciliation.hpp okx/reconciliation.cpp
         okx/order_timeout_monitor.hpp okx/order_timeout_monitor.cpp
+        okx/risk.hpp okx/risk.cpp
+        okx/position.hpp okx/position.cpp
+        okx/kill_switch.hpp okx/kill_switch.cpp
         okx/account_state.hpp okx/account_state.cpp
         util/json.hpp util/json.cpp util/base64.hpp util/base64.cpp
         util/sha1.hpp util/sha1.cpp)

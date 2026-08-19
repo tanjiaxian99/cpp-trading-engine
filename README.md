@@ -361,9 +361,9 @@ reconciliation, cancel-all — which is what the Design table already claims it 
 
 ### B6 · Risk — 3–4 h
 
-- [ ] Pre-trade checks: max order size, max notional, price collar, max open orders — **1.5 h**
-- [ ] Position and PnL tracking — **1 h**
-- [ ] Kill switch: cancel-all + halt, triggered manually and automatically — **1.5 h**
+- [x] Pre-trade checks: max order size, max notional, price collar, max open orders — **1.5 h**
+- [x] Position and PnL tracking — **1 h**
+- [x] Kill switch: cancel-all + halt, triggered manually and automatically — **1.5 h**
 
 ### B7 · Strategy — 5–8 h
 
