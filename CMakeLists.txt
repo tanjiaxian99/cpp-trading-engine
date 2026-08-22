@@ -41,31 +41,31 @@ add_executable(trading_engine main.cpp config.hpp
         net/websocket_control.hpp net/websocket_control.cpp
         net/websocket_reassembler.hpp
         rest/rest_client.hpp rest/rest_client.cpp
-        okx/auth.hpp okx/auth.cpp okx/okx_constants.hpp
-        okx/response_utils.hpp okx/response_utils.cpp
-        okx/instrument.hpp okx/instrument.cpp
-        okx/order_types.hpp okx/order_types.cpp
-        okx/rest_orders.hpp okx/rest_orders.cpp
-        okx/ws_orders.hpp okx/ws_orders.cpp
-        okx/ws_response_demux.hpp okx/ws_response_demux.cpp
-        okx/heartbeat.hpp okx/heartbeat.cpp okx/okx_ws_client.hpp okx/okx_ws_client.cpp
-        okx/order_book.hpp okx/order_book.cpp okx/market_data.hpp okx/market_data.cpp
-        okx/order_events.hpp okx/order_events.cpp
-        okx/order_lifecycle.hpp okx/order_lifecycle.cpp
-        okx/order_store.hpp okx/order_store.cpp
-        okx/reconciliation.hpp okx/reconciliation.cpp
-        okx/order_timeout_monitor.hpp okx/order_timeout_monitor.cpp
-        okx/risk.hpp okx/risk.cpp
-        okx/position.hpp okx/position.cpp
-        okx/kill_switch.hpp okx/kill_switch.cpp
-        okx/strategy.hpp
-        okx/naive_quoter.hpp okx/naive_quoter.cpp
-        okx/account_state.hpp okx/account_state.cpp
+        okx/connectivity/auth.hpp okx/connectivity/auth.cpp okx/common/okx_constants.hpp
+        okx/common/response_utils.hpp okx/common/response_utils.cpp
+        okx/connectivity/instrument.hpp okx/connectivity/instrument.cpp
+        okx/orders/order_types.hpp okx/orders/order_types.cpp
+        okx/orders/rest_orders.hpp okx/orders/rest_orders.cpp
+        okx/orders/ws_orders.hpp okx/orders/ws_orders.cpp
+        okx/connectivity/ws_response_demux.hpp okx/connectivity/ws_response_demux.cpp
+        okx/connectivity/heartbeat.hpp okx/connectivity/heartbeat.cpp okx/connectivity/okx_ws_client.hpp okx/connectivity/okx_ws_client.cpp
+        okx/marketdata/order_book.hpp okx/marketdata/order_book.cpp okx/marketdata/market_data.hpp okx/marketdata/market_data.cpp
+        okx/orders/order_events.hpp okx/orders/order_events.cpp
+        okx/orders/order_lifecycle.hpp okx/orders/order_lifecycle.cpp
+        okx/orders/order_store.hpp okx/orders/order_store.cpp
+        okx/orders/reconciliation.hpp okx/orders/reconciliation.cpp
+        okx/orders/order_timeout_monitor.hpp okx/orders/order_timeout_monitor.cpp
+        okx/risk/risk.hpp okx/risk/risk.cpp
+        okx/risk/position.hpp okx/risk/position.cpp
+        okx/risk/kill_switch.hpp okx/risk/kill_switch.cpp
+        okx/strategy/strategy.hpp
+        okx/strategy/naive_quoter.hpp okx/strategy/naive_quoter.cpp
+        okx/risk/account_state.hpp okx/risk/account_state.cpp
         util/json.hpp util/json.cpp util/base64.hpp util/base64.cpp
         util/sha1.hpp util/sha1.cpp)
 
-# Lets every file use root-relative includes (e.g. "okx/auth.hpp" from
-# main.cpp, or even from within okx/rest_orders.cpp itself), regardless of
+# Lets every file use root-relative includes (e.g. "okx/connectivity/auth.hpp" from
+# main.cpp, or even from within okx/orders/rest_orders.cpp itself), regardless of
 # which directory the including file lives in.
 target_include_directories(trading_engine PRIVATE ${CMAKE_SOURCE_DIR})
 
