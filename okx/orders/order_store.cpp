@@ -25,11 +25,19 @@ void OrderStore::Remove(std::string_view cl_ord_id) {
         return;
     }
 
+    if (on_remove_) {
+        on_remove_(cl_ord_id);
+    }
+
     for (std::size_t j = i; j + 1 < count_; j++) {
         slots_[j] = std::move(slots_[j + 1]);
     }
     slots_[count_ - 1].reset();
     count_--;
+}
+
+void OrderStore::SetOnRemove(RemovalListener listener) {
+    on_remove_ = std::move(listener);
 }
 
 void OrderStore::ForEach(const std::function<void(Order&)>& action) {

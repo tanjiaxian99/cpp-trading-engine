@@ -323,6 +323,8 @@ int main() {
         NaiveQuoter quoter(private_ws_client, order_store, std::string(kEthUsdt),
                            eth_usdt_inst_id_code, std::string(kQuoterSz), eth_spec.tick_sz,
                            kQuoterBps, kRequoteThresholdBps);
+        order_store.SetOnRemove(
+            [&quoter](std::string_view cl_ord_id) { quoter.OnOrderRemoved(cl_ord_id); });
 
         const std::string subscribe_msg = std::format(kBooksSubscribeFormat, kEthUsdt);
         const std::string books_unsubscribe_msg = std::format(kBooksUnsubscribeFormat, kEthUsdt);
@@ -428,22 +430,22 @@ int main() {
                 ForEachOrderEvent(message, [&order_round_trip, &position, &kill_switch,
                                             &quoter](const OrderEvent& event) {
                     LogOrderEvent(event);
-                    order_round_trip.ApplyOrderEvent(event);
-
                     if (event.type == OrderEventType::kFill ||
                         event.type == OrderEventType::kPartialFill) {
+                        quoter.OnFill(event);
                         position.ApplyFill(event.side, json::ParseDouble(event.fill_px),
                                            json::ParseDouble(event.fill_sz));
                         std::cout << "Position: netQty=" << position.NetQty()
                                   << " avgEntryPx=" << position.AvgEntryPx()
                                   << " realizedPnl=" << position.RealizedPnl() << "\n";
-                        quoter.OnFill(event);
                         if (position.RealizedPnl() < -kMaxRealizedLoss) {
                             kill_switch.Trigger("max realized loss breached");
                         }
                     } else if (event.type == OrderEventType::kReject) {
                         quoter.OnReject(event);
                     }
+
+                    order_round_trip.ApplyOrderEvent(event);
                 });
             } else if (channel == kAccountChannel) {
                 account_state.ApplyMessage(message);

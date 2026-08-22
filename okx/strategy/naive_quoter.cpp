@@ -56,7 +56,7 @@ void NaiveQuoter::OnBookUpdate(const OrderBook& book) {
 }
 
 void NaiveQuoter::OnFill(const OrderEvent& event) {
-    if (!ClearIfOwned(event)) {
+    if (!OwnsOrder(event.cl_ord_id)) {
         return;
     }
     std::cout << "Quoter: fill on " << event.cl_ord_id << " side=" << event.side
@@ -64,10 +64,20 @@ void NaiveQuoter::OnFill(const OrderEvent& event) {
 }
 
 void NaiveQuoter::OnReject(const OrderEvent& event) {
-    if (!ClearIfOwned(event)) {
+    if (!OwnsOrder(event.cl_ord_id)) {
         return;
     }
     std::cout << "Quoter: reject on " << event.cl_ord_id << "\n";
+}
+
+void NaiveQuoter::OnOrderRemoved(std::string_view cl_ord_id) {
+    if (bid_cl_ord_id_ && *bid_cl_ord_id_ == cl_ord_id) {
+        std::cout << "Quoter: bid " << cl_ord_id << " removed from order_store_\n";
+        bid_cl_ord_id_.reset();
+    } else if (ask_cl_ord_id_ && *ask_cl_ord_id_ == cl_ord_id) {
+        std::cout << "Quoter: ask " << cl_ord_id << " removed from order_store_\n";
+        ask_cl_ord_id_.reset();
+    }
 }
 
 void NaiveQuoter::OnTimer() {
@@ -85,15 +95,6 @@ void NaiveQuoter::Requote(double mid) {
 }
 
 void NaiveQuoter::EnsureQuoted(double mid) {
-    if (bid_cl_ord_id_ && !order_store_.FindByClOrdId(*bid_cl_ord_id_)) {
-        std::cout << "Quoter: bid " << *bid_cl_ord_id_ << " no longer in order_store_, clearing\n";
-        bid_cl_ord_id_.reset();
-    }
-    if (ask_cl_ord_id_ && !order_store_.FindByClOrdId(*ask_cl_ord_id_)) {
-        std::cout << "Quoter: ask " << *ask_cl_ord_id_ << " no longer in order_store_, clearing\n";
-        ask_cl_ord_id_.reset();
-    }
-
     const double bid_px = mid * (1.0 - quote_bps_ / kBpsPerUnit);
     const double ask_px = mid * (1.0 + quote_bps_ / kBpsPerUnit);
 
@@ -142,16 +143,7 @@ std::string NaiveQuoter::FormatPrice(double px) const {
     return std::format("{:.{}f}", rounded, tick_decimal_places_);
 }
 
-bool NaiveQuoter::ClearIfOwned(const OrderEvent& event) {
-    if (bid_cl_ord_id_ && *bid_cl_ord_id_ == event.cl_ord_id) {
-        bid_cl_ord_id_.reset();
-        return true;
-    }
-
-    if (ask_cl_ord_id_ && *ask_cl_ord_id_ == event.cl_ord_id) {
-        ask_cl_ord_id_.reset();
-        return true;
-    }
-
-    return false;
+bool NaiveQuoter::OwnsOrder(std::string_view cl_ord_id) const {
+    return (bid_cl_ord_id_ && *bid_cl_ord_id_ == cl_ord_id) ||
+           (ask_cl_ord_id_ && *ask_cl_ord_id_ == cl_ord_id);
 }

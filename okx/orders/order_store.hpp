@@ -11,6 +11,8 @@
 
 class OrderStore {
 public:
+    using RemovalListener = std::function<void(std::string_view cl_ord_id)>;
+
     static constexpr std::size_t kCapacity = 1024;
 
     void Add(std::string cl_ord_id, std::string inst_id, std::string side, std::string px,
@@ -18,6 +20,7 @@ public:
     void Remove(std::string_view cl_ord_id);
     // The store should not be mutated during the loop-through to avoid shifting orders around
     void ForEach(const std::function<void(Order&)>& action);
+    void SetOnRemove(RemovalListener listener);
 
     [[nodiscard]] Order* FindByClOrdId(std::string_view cl_ord_id);
     [[nodiscard]] Order* FindByOrdId(std::string_view ord_id);
@@ -31,4 +34,5 @@ private:
 
     std::array<std::optional<Order>, kCapacity> slots_{};
     std::size_t count_ = 0;
+    RemovalListener on_remove_;
 };

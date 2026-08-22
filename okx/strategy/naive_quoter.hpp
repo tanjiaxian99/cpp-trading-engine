@@ -18,6 +18,7 @@ public:
     void OnFill(const OrderEvent& event) override;
     void OnReject(const OrderEvent& event) override;
     void OnTimer() override;
+    void OnOrderRemoved(std::string_view cl_ord_id);
 
 private:
     void Requote(double mid);
@@ -25,7 +26,7 @@ private:
     void CancelSide(std::optional<std::string>& cl_ord_id);
     std::string PlaceSide(std::string_view side, double px);
     [[nodiscard]] std::string FormatPrice(double px) const;
-    bool ClearIfOwned(const OrderEvent& event);
+    [[nodiscard]] bool OwnsOrder(std::string_view cl_ord_id) const;
 
     OkxWsClient& ws_client_;
     OrderStore& order_store_;
