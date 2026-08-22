@@ -4,6 +4,7 @@
 #include <csignal>
 #include <exception>
 #include <format>
+#include <functional>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -15,7 +16,9 @@
 #include "okx/instrument.hpp"
 #include "okx/kill_switch.hpp"
 #include "okx/market_data.hpp"
+#include "okx/naive_quoter.hpp"
 #include "okx/okx_constants.hpp"
+#include "okx/okx_ws_client.hpp"
 #include "okx/order_book.hpp"
 #include "okx/order_events.hpp"
 #include "okx/order_lifecycle.hpp"
@@ -27,7 +30,6 @@
 #include "okx/response_utils.hpp"
 #include "okx/rest_orders.hpp"
 #include "okx/risk.hpp"
-#include "okx/ws_client.hpp"
 #include "okx/ws_orders.hpp"
 #include "okx/ws_response_demux.hpp"
 #include "rest/rest_client.hpp"
@@ -68,6 +70,11 @@ constexpr RiskLimits kRiskLimits{
     .max_open_orders = 10,
 };
 constexpr double kMaxRealizedLoss = 50.0;
+
+constexpr std::string_view kQuoterSz = kSmokeTestSz;
+constexpr double kQuoterBps = 20.0;
+constexpr double kRequoteThresholdBps = 10.0;
+constexpr auto kQuoterTimerInterval = std::chrono::seconds(2);
 
 void LogBookUpdate(const OrderBook& book) {
     std::cout << "book: bid=" << book.BestBid().value_or(0.0)
@@ -166,6 +173,14 @@ private:
 
     void OnOrderResponse(std::string_view response) {
         std::cout << "WS order response: " << response << "\n";
+        if (!IsRequestAccepted(response)) {
+            // Rejected before ever existing on the exchange — Order has no
+            // transition for this from kPendingNew. Leave it for
+            // reconciliation/timeout cleanup rather than proceeding to
+            // amend/cancel an order that was never placed.
+            std::cout << "order placement rejected, leaving cleanup to reconciliation\n";
+            return;
+        }
         const auto data = FindData(response);
         const auto ord_id = data ? json::FindString(*data, kOrdId) : std::nullopt;
         if (!ord_id) {
@@ -267,6 +282,11 @@ int main() {
         std::cout << "BTC-USDT: tickSz=" << spec.tick_sz << " lotSz=" << spec.lot_sz
                   << " minSz=" << spec.min_sz << "\n";
 
+        // This demo account only has ETH-USDT enabled for trading — the
+        // quoter runs on ETH-USDT below rather than BTC-USDT for that
+        // reason, reusing this tick size.
+        const InstrumentSpec eth_spec = FetchInstrumentSpec(rest_client, kEthUsdt);
+
         const long long eth_usdt_inst_id_code = FetchInstIdCode(rest_client, auth, kEthUsdt);
         std::cout << "ETH-USDT instIdCode=" << eth_usdt_inst_id_code << "\n";
 
@@ -294,22 +314,33 @@ int main() {
         asio::io_context io_context;
         OkxWsClient ws_client(io_context, std::string(kOkxWsHost), std::string(kOkxWsPort),
                               std::string(kPublicWsPath));
+        OkxWsClient private_ws_client(io_context, std::string(kOkxWsHost), std::string(kOkxWsPort),
+                                      std::string(kPrivateWsPath), auth);
 
         OrderBook order_book;
+        OrderStore order_store;
+        KillSwitch kill_switch(rest_client, auth, order_store);
+        NaiveQuoter quoter(private_ws_client, order_store, std::string(kEthUsdt),
+                           eth_usdt_inst_id_code, std::string(kQuoterSz), eth_spec.tick_sz,
+                           kQuoterBps, kRequoteThresholdBps);
 
-        const std::string subscribe_msg = std::format(kBooksSubscribeFormat, kBtcUsdt);
-        const std::string books_unsubscribe_msg = std::format(kBooksUnsubscribeFormat, kBtcUsdt);
-        const std::string books_subscribe_msg = std::format(kBooksResubscribeFormat, kBtcUsdt);
+        const std::string subscribe_msg = std::format(kBooksSubscribeFormat, kEthUsdt);
+        const std::string books_unsubscribe_msg = std::format(kBooksUnsubscribeFormat, kEthUsdt);
+        const std::string books_subscribe_msg = std::format(kBooksResubscribeFormat, kEthUsdt);
 
         ws_client.SetOnConnected([&ws_client, &subscribe_msg]() {
             ws_client.Send(subscribe_msg);
             std::cout << "sent books+trades subscribe request\n";
         });
         ws_client.SetOnMessage([&order_book, &ws_client, &books_unsubscribe_msg,
-                                &books_subscribe_msg](std::string_view message) {
+                                &books_subscribe_msg, &quoter, &kill_switch,
+                                &private_ws_client](std::string_view message) {
             switch (ApplyBookMessage(message, order_book)) {
                 case BookMessageResult::kApplied:
                     LogBookUpdate(order_book);
+                    if (!kill_switch.IsTriggered() && private_ws_client.IsAuthenticated()) {
+                        quoter.OnBookUpdate(order_book);
+                    }
                     break;
                 case BookMessageResult::kGapDetected:
                     std::cerr << "Order book sequence gap detected — resubscribing for a fresh "
@@ -323,17 +354,28 @@ int main() {
             }
         });
 
-        OkxWsClient private_ws_client(io_context, std::string(kOkxWsHost), std::string(kOkxWsPort),
-                                      std::string(kPrivateWsPath));
         AccountState account_state;
         WsResponseDemux ws_demux;
-        OrderStore order_store;
         WsOrderRoundTrip order_round_trip(private_ws_client, ws_demux, rest_client, auth,
                                           order_request, order_store);
         OrderTimeoutMonitor order_timeout_monitor(io_context, order_store, rest_client, auth);
         order_timeout_monitor.Start();
-        KillSwitch kill_switch(rest_client, auth, order_store);
         Position position;
+
+        asio::steady_timer quoter_timer(io_context);
+        std::function<void()> schedule_quoter_timer = [&]() {
+            quoter_timer.expires_after(kQuoterTimerInterval);
+            quoter_timer.async_wait([&](const boost::system::error_code& ec) {
+                if (ec) {
+                    return;
+                }
+                if (!kill_switch.IsTriggered() && private_ws_client.IsAuthenticated()) {
+                    quoter.OnTimer();
+                }
+                schedule_quoter_timer();
+            });
+        };
+        schedule_quoter_timer();
 
         asio::signal_set shutdown_signals(io_context, SIGINT, SIGTERM);
         shutdown_signals.async_wait(
@@ -345,14 +387,10 @@ int main() {
                 io_context.stop();
             });
 
-        private_ws_client.SetOnConnected([&private_ws_client, &auth]() {
-            private_ws_client.Send(auth.BuildWsLoginMessage());
-            std::cout << "sent private WS login request\n";
-        });
-
         private_ws_client.SetOnMessage([&private_ws_client, &rest_client, &auth, &account_state,
                                         &ws_demux, &order_round_trip, &order_store, &kill_switch,
-                                        &position, &order_request](std::string_view message) {
+                                        &position, &order_request,
+                                        &quoter](std::string_view message) {
             if (json::FindString(message, kEvent) == kLoginEvent) {
                 const auto code = json::FindString(message, kCode).value_or(kEmpty);
                 std::cout << "private WS login: code=" << code
@@ -387,23 +425,26 @@ int main() {
 
             const auto channel = json::FindString(message, kChannel);
             if (channel == kOrdersChannel) {
-                ForEachOrderEvent(
-                    message, [&order_round_trip, &position, &kill_switch](const OrderEvent& event) {
-                        LogOrderEvent(event);
-                        order_round_trip.ApplyOrderEvent(event);
+                ForEachOrderEvent(message, [&order_round_trip, &position, &kill_switch,
+                                            &quoter](const OrderEvent& event) {
+                    LogOrderEvent(event);
+                    order_round_trip.ApplyOrderEvent(event);
 
-                        if (event.type == OrderEventType::kFill ||
-                            event.type == OrderEventType::kPartialFill) {
-                            position.ApplyFill(event.side, json::ParseDouble(event.fill_px),
-                                               json::ParseDouble(event.fill_sz));
-                            std::cout << "Position: netQty=" << position.NetQty()
-                                      << " avgEntryPx=" << position.AvgEntryPx()
-                                      << " realizedPnl=" << position.RealizedPnl() << "\n";
-                            if (position.RealizedPnl() < -kMaxRealizedLoss) {
-                                kill_switch.Trigger("max realized loss breached");
-                            }
+                    if (event.type == OrderEventType::kFill ||
+                        event.type == OrderEventType::kPartialFill) {
+                        position.ApplyFill(event.side, json::ParseDouble(event.fill_px),
+                                           json::ParseDouble(event.fill_sz));
+                        std::cout << "Position: netQty=" << position.NetQty()
+                                  << " avgEntryPx=" << position.AvgEntryPx()
+                                  << " realizedPnl=" << position.RealizedPnl() << "\n";
+                        quoter.OnFill(event);
+                        if (position.RealizedPnl() < -kMaxRealizedLoss) {
+                            kill_switch.Trigger("max realized loss breached");
                         }
-                    });
+                    } else if (event.type == OrderEventType::kReject) {
+                        quoter.OnReject(event);
+                    }
+                });
             } else if (channel == kAccountChannel) {
                 account_state.ApplyMessage(message);
                 account_state.ForEachBalance(LogAccountBalance);

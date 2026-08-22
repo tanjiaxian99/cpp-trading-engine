@@ -367,8 +367,8 @@ reconciliation, cancel-all — which is what the Design table already claims it 
 
 ### B7 · Strategy — 5–8 h
 
-- [ ] Strategy interface: `on_book_update`, `on_fill`, `on_reject`, `on_timer` — **1 h**
-- [ ] Naive quoter: post bid/ask at ±k bps, requote when mid moves past a threshold — **3 h**
+- [x] Strategy interface: `on_book_update`, `on_fill`, `on_reject`, `on_timer` — **1 h**
+- [x] Naive quoter: post bid/ask at ±k bps, requote when mid moves past a threshold — **3 h**
 - [ ] Cancel/replace logic, per-endpoint token-bucket rate limiter (OKX limits are
   per-endpoint requests-per-2s, not a global weight budget) — **2 h**
 - [ ] Run it live for several hours; fix everything that breaks — **2 h**

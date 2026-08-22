@@ -43,7 +43,8 @@ long long FetchInstIdCode(RestClient& rest_client, const OkxAuth& auth, std::str
 
     const auto data = FindData(response.body);
     if (!data) {
-        throw std::runtime_error(std::format("Instrument not found: {}", inst_id));
+        throw std::runtime_error(
+            std::format("Instrument not found: {}, response: {}", inst_id, response.body));
     }
 
     const auto inst_id_code = json::FindNumber(*data, kInstIdCode);

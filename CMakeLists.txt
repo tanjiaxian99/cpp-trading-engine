@@ -48,7 +48,7 @@ add_executable(trading_engine main.cpp config.hpp
         okx/rest_orders.hpp okx/rest_orders.cpp
         okx/ws_orders.hpp okx/ws_orders.cpp
         okx/ws_response_demux.hpp okx/ws_response_demux.cpp
-        okx/heartbeat.hpp okx/heartbeat.cpp okx/ws_client.hpp okx/ws_client.cpp
+        okx/heartbeat.hpp okx/heartbeat.cpp okx/okx_ws_client.hpp okx/okx_ws_client.cpp
         okx/order_book.hpp okx/order_book.cpp okx/market_data.hpp okx/market_data.cpp
         okx/order_events.hpp okx/order_events.cpp
         okx/order_lifecycle.hpp okx/order_lifecycle.cpp
@@ -58,6 +58,8 @@ add_executable(trading_engine main.cpp config.hpp
         okx/risk.hpp okx/risk.cpp
         okx/position.hpp okx/position.cpp
         okx/kill_switch.hpp okx/kill_switch.cpp
+        okx/strategy.hpp
+        okx/naive_quoter.hpp okx/naive_quoter.cpp
         okx/account_state.hpp okx/account_state.cpp
         util/json.hpp util/json.cpp util/base64.hpp util/base64.cpp
         util/sha1.hpp util/sha1.cpp)

@@ -11,6 +11,7 @@
 #include "net/transport.hpp"
 #include "net/websocket_frame.hpp"
 #include "net/websocket_reassembler.hpp"
+#include "okx/auth.hpp"
 
 namespace asio = boost::asio;
 
@@ -19,7 +20,8 @@ public:
     using MessageHandler = std::function<void(std::string_view message)>;
     using ConnectHandler = std::function<void()>;
 
-    OkxWsClient(asio::io_context& io_context, std::string host, std::string port, std::string path);
+    OkxWsClient(asio::io_context& io_context, std::string host, std::string port, std::string path,
+                std::optional<OkxAuth> auth = std::nullopt);
 
     void SetOnConnected(ConnectHandler handler);
     void SetOnMessage(MessageHandler handler);
@@ -27,6 +29,9 @@ public:
     void Send(std::string_view payload);
     [[nodiscard]] bool IsConnected() const {
         return transport_.has_value();
+    }
+    [[nodiscard]] bool IsAuthenticated() const {
+        return authenticated_;
     }
 
 private:
@@ -38,14 +43,18 @@ private:
     void ScheduleReconnect();
     void ReadLoop();
     void HandleFrame(const WebSocketFrame& frame);
+    void DispatchMessage(std::string_view message);
     void WriteRaw(const std::string& frame);
     void StartWrite();
     void ScheduleHeartbeat();
+    void SendLogin();
 
     asio::io_context& io_context_;
     std::string host_;
     std::string port_;
     std::string path_;
+    std::optional<OkxAuth> auth_;
+    bool authenticated_ = false;
 
     std::optional<Transport> transport_;
     asio::steady_timer reconnect_timer_;

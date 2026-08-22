@@ -1,13 +1,16 @@
-#include "okx/ws_client.hpp"
+#include "okx/okx_ws_client.hpp"
 
 #include <algorithm>
 #include <iostream>
 #include <random>
+#include <stdexcept>
 #include <utility>
 
 #include "net/websocket_control.hpp"
 #include "net/websocket_handshake.hpp"
 #include "okx/heartbeat.hpp"
+#include "okx/okx_constants.hpp"
+#include "util/json.hpp"
 
 namespace {
 constexpr auto kBaseBackoff = std::chrono::milliseconds(500);
@@ -28,11 +31,12 @@ std::chrono::milliseconds ComputeBackoff(int attempt) {
 }  // namespace
 
 OkxWsClient::OkxWsClient(asio::io_context& io_context, std::string host, std::string port,
-                         std::string path)
+                         std::string path, std::optional<OkxAuth> auth)
     : io_context_(io_context),
       host_(std::move(host)),
       port_(std::move(port)),
       path_(std::move(path)),
+      auth_(std::move(auth)),
       reconnect_timer_(io_context_),
       heartbeat_timer_(io_context_) {}
 
@@ -60,8 +64,12 @@ void OkxWsClient::Connect() {
 
         reconnect_attempt_ = 0;
         rx_buffer_.clear();
+        authenticated_ = false;
 
         std::cout << "OKX WebSocket connected to " << host_ << path_ << "\n";
+        if (auth_) {
+            SendLogin();
+        }
         if (on_connected_) {
             on_connected_();
         }
@@ -75,6 +83,7 @@ void OkxWsClient::Connect() {
 
 void OkxWsClient::ScheduleReconnect() {
     transport_.reset();
+    authenticated_ = false;
     heartbeat_timer_.cancel();
     tx_ring_.Reset();
     write_in_flight_ = false;
@@ -130,15 +139,13 @@ void OkxWsClient::HandleFrame(const WebSocketFrame& frame) {
     } else if (!frame.header.fin) {
         reassembler_.Append(frame.payload, false);
         return;
-    } else if (on_message_) {
-        on_message_(frame.payload);
+    } else {
+        DispatchMessage(frame.payload);
         return;
     }
 
     if (reassembler_.IsComplete()) {
-        if (on_message_) {
-            on_message_(reassembler_.GetMessage());
-        }
+        DispatchMessage(reassembler_.GetMessage());
         reassembler_.Reset();
     }
 }
@@ -181,4 +188,21 @@ void OkxWsClient::ScheduleHeartbeat() {
         WriteRaw(EncodeOkxPing());
         ScheduleHeartbeat();
     });
+}
+
+void OkxWsClient::SendLogin() {
+    if (!auth_) {
+        throw std::runtime_error("OkxWsClient::SendLogin called without auth");
+    }
+    Send(auth_->BuildWsLoginMessage());
+    std::cout << "Sent WS login request\n";
+}
+
+void OkxWsClient::DispatchMessage(std::string_view message) {
+    if (auth_ && !authenticated_ && json::FindString(message, kEvent) == kLoginEvent) {
+        authenticated_ = json::FindString(message, kCode) == kSuccessCode;
+    }
+    if (on_message_) {
+        on_message_(message);
+    }
 }
