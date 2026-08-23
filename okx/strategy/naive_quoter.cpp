@@ -65,11 +65,11 @@ void NaiveQuoter::OnFill(const OrderEvent& event) {
               << " px=" << event.fill_px << " sz=" << event.fill_sz << "\n";
 }
 
-void NaiveQuoter::OnReject(const OrderEvent& event) {
+void NaiveQuoter::OnCancel(const OrderEvent& event) {
     if (!OwnsOrder(event.cl_ord_id)) {
         return;
     }
-    std::cout << "Quoter: reject on " << event.cl_ord_id << "\n";
+    std::cout << "Quoter: cancel on " << event.cl_ord_id << "\n";
 }
 
 void NaiveQuoter::OnOrderRemoved(std::string_view cl_ord_id) {

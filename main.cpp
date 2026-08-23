@@ -73,12 +73,12 @@ constexpr RiskLimits kRiskLimits{
 constexpr double kMaxRealizedLoss = 50.0;
 
 constexpr std::string_view kQuoterSz = kSmokeTestSz;
-constexpr double kQuoterBps = 20.0;
-constexpr double kRequoteThresholdBps = 10.0;
+constexpr double kQuoterBps = 1.0;
+constexpr double kRequoteThresholdBps = 1.0;
 constexpr RateLimit kOrderRateLimit{.capacity = 60, .window = std::chrono::seconds(2)};
 constexpr RateLimit kCancelRateLimit{.capacity = 60, .window = std::chrono::seconds(2)};
 constexpr RateLimit kAmendRateLimit{.capacity = 60, .window = std::chrono::seconds(2)};
-constexpr auto kQuoterTimerInterval = std::chrono::seconds(2);
+constexpr auto kQuoterTimerInterval = std::chrono::milliseconds(500);
 
 void LogBookUpdate(const OrderBook& book) {
     std::cout << "book: bid=" << book.BestBid().value_or(0.0)
@@ -446,8 +446,8 @@ int main() {
                         if (position.RealizedPnl() < -kMaxRealizedLoss) {
                             kill_switch.Trigger("max realized loss breached");
                         }
-                    } else if (event.type == OrderEventType::kReject) {
-                        quoter.OnReject(event);
+                    } else if (event.type == OrderEventType::kCancel) {
+                        quoter.OnCancel(event);
                     }
 
                     order_round_trip.ApplyOrderEvent(event);

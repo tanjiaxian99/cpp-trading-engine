@@ -8,7 +8,7 @@ enum class OrderEventType : std::uint8_t {
     kLive,
     kPartialFill,
     kFill,
-    kReject,
+    kCancel,
 };
 
 struct OrderEvent {

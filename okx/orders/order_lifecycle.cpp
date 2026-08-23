@@ -96,11 +96,11 @@ void Order::ApplyEvent(const OrderEvent& event) {
             TransitionTo(OrderState::kFilled);
             break;
 
-        case OrderEventType::kReject:
+        case OrderEventType::kCancel:
             if (state_ == OrderState::kFilled || state_ == OrderState::kCanceled ||
                 state_ == OrderState::kRejected) {
                 throw std::runtime_error(std::format(
-                    "Order {}: unexpected {} -> kReject transition", cl_ord_id_, ToString(state_)));
+                    "Order {}: unexpected {} -> kCancel transition", cl_ord_id_, ToString(state_)));
             }
 
             if (state_ == OrderState::kPendingNew) {

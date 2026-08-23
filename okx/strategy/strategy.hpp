@@ -14,6 +14,6 @@ public:
 
     virtual void OnBookUpdate(const OrderBook& book) = 0;
     virtual void OnFill(const OrderEvent& event) = 0;
-    virtual void OnReject(const OrderEvent& event) = 0;
+    virtual void OnCancel(const OrderEvent& event) = 0;
     virtual void OnTimer() = 0;
 };

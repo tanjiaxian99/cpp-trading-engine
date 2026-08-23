@@ -18,7 +18,7 @@ public:
 
     void OnBookUpdate(const OrderBook& book) override;
     void OnFill(const OrderEvent& event) override;
-    void OnReject(const OrderEvent& event) override;
+    void OnCancel(const OrderEvent& event) override;
     void OnTimer() override;
     void OnOrderRemoved(std::string_view cl_ord_id);
 

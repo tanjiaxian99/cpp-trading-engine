@@ -18,7 +18,7 @@ OrderEventType ClassifyState(std::string_view state) {
         return OrderEventType::kFill;
     }
     if (state == kStateCanceled || state == kStateMmpCanceled) {
-        return OrderEventType::kReject;
+        return OrderEventType::kCancel;
     }
     throw std::runtime_error(std::format("Unrecognized order state: {}", state));
 }
@@ -61,8 +61,8 @@ std::string_view ToString(OrderEventType type) {
             return "partial-fill";
         case OrderEventType::kFill:
             return "fill";
-        case OrderEventType::kReject:
-            return "reject";
+        case OrderEventType::kCancel:
+            return "cancel";
     }
     throw std::runtime_error("Unrecognized OrderEventType");
 }
