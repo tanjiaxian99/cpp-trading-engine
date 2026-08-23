@@ -63,7 +63,9 @@ add_executable(trading_engine main.cpp config.hpp
         okx/strategy/naive_quoter.hpp okx/strategy/naive_quoter.cpp
         okx/risk/account_state.hpp okx/risk/account_state.cpp
         util/json.hpp util/json.cpp util/base64.hpp util/base64.cpp
-        util/sha1.hpp util/sha1.cpp)
+        util/sha1.hpp util/sha1.cpp
+        perf/clock.hpp
+        perf/latency_histogram.hpp perf/latency_histogram.cpp)
 
 # Lets every file use root-relative includes (e.g. "okx/connectivity/auth.hpp" from
 # main.cpp, or even from within okx/orders/rest_orders.cpp itself), regardless of
