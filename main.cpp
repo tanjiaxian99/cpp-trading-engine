@@ -16,6 +16,7 @@
 #include "okx/connectivity/auth.hpp"
 #include "okx/connectivity/instrument.hpp"
 #include "okx/connectivity/okx_ws_client.hpp"
+#include "okx/connectivity/rate_limiter.hpp"
 #include "okx/connectivity/ws_response_demux.hpp"
 #include "okx/marketdata/market_data.hpp"
 #include "okx/marketdata/order_book.hpp"
@@ -74,6 +75,9 @@ constexpr double kMaxRealizedLoss = 50.0;
 constexpr std::string_view kQuoterSz = kSmokeTestSz;
 constexpr double kQuoterBps = 20.0;
 constexpr double kRequoteThresholdBps = 10.0;
+constexpr RateLimit kOrderRateLimit{.capacity = 60, .window = std::chrono::seconds(2)};
+constexpr RateLimit kCancelRateLimit{.capacity = 60, .window = std::chrono::seconds(2)};
+constexpr RateLimit kAmendRateLimit{.capacity = 60, .window = std::chrono::seconds(2)};
 constexpr auto kQuoterTimerInterval = std::chrono::seconds(2);
 
 void LogBookUpdate(const OrderBook& book) {
@@ -320,7 +324,8 @@ int main() {
         OrderBook order_book;
         OrderStore order_store;
         KillSwitch kill_switch(rest_client, auth, order_store);
-        NaiveQuoter quoter(private_ws_client, order_store, std::string(kEthUsdt),
+        EndpointRateLimiter rate_limiter(kOrderRateLimit, kCancelRateLimit, kAmendRateLimit);
+        NaiveQuoter quoter(private_ws_client, order_store, rate_limiter, std::string(kEthUsdt),
                            eth_usdt_inst_id_code, std::string(kQuoterSz), eth_spec.tick_sz,
                            kQuoterBps, kRequoteThresholdBps);
         order_store.SetOnRemove(

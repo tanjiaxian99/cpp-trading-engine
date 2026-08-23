@@ -22,11 +22,13 @@ int DecimalPlaces(std::string_view tick_sz) {
 }
 }  // namespace
 
-NaiveQuoter::NaiveQuoter(OkxWsClient& ws_client, OrderStore& order_store, std::string inst_id,
+NaiveQuoter::NaiveQuoter(OkxWsClient& ws_client, OrderStore& order_store,
+                         EndpointRateLimiter& rate_limiter, std::string inst_id,
                          long long inst_id_code, std::string sz, std::string_view tick_sz,
                          double quote_bps, double requote_threshold_bps)
     : ws_client_(ws_client),
       order_store_(order_store),
+      rate_limiter_(rate_limiter),
       inst_id_(std::move(inst_id)),
       inst_id_code_(inst_id_code),
       sz_(std::move(sz)),
@@ -88,15 +90,15 @@ void NaiveQuoter::OnTimer() {
 }
 
 void NaiveQuoter::Requote(double mid) {
-    CancelSide(bid_cl_ord_id_);
-    CancelSide(ask_cl_ord_id_);
-    EnsureQuoted(mid);
+    const auto [bid_px, ask_px] = ComputeQuotePrices(mid);
+
+    ReplaceSide(bid_cl_ord_id_, kBuy, bid_px);
+    ReplaceSide(ask_cl_ord_id_, kSell, ask_px);
     last_quoted_mid_ = mid;
 }
 
 void NaiveQuoter::EnsureQuoted(double mid) {
-    const double bid_px = mid * (1.0 - quote_bps_ / kBpsPerUnit);
-    const double ask_px = mid * (1.0 + quote_bps_ / kBpsPerUnit);
+    const auto [bid_px, ask_px] = ComputeQuotePrices(mid);
 
     if (!bid_cl_ord_id_) {
         bid_cl_ord_id_ = PlaceSide(kBuy, bid_px);
@@ -106,23 +108,44 @@ void NaiveQuoter::EnsureQuoted(double mid) {
     }
 }
 
-void NaiveQuoter::CancelSide(std::optional<std::string>& cl_ord_id) {
+std::pair<double, double> NaiveQuoter::ComputeQuotePrices(double mid) const {
+    return {mid * (1.0 - quote_bps_ / kBpsPerUnit), mid * (1.0 + quote_bps_ / kBpsPerUnit)};
+}
+
+void NaiveQuoter::ReplaceSide(std::optional<std::string>& cl_ord_id, std::string_view side,
+                              double px) {
     if (!cl_ord_id) {
+        cl_ord_id = PlaceSide(side, px);
         return;
     }
 
     Order* order = order_store_.FindByClOrdId(*cl_ord_id);
-    if (order && !order->OrdId().empty()) {
-        const WsOrderRequest cancel = BuildWsCancelOrderMessage(inst_id_code_, order->OrdId());
-        ws_client_.Send(cancel.message);
-        std::cout << "Quoter: sent cancel for " << *cl_ord_id << "\n";
-    } else {
-        std::cout << "Quoter: cannot cancel " << *cl_ord_id << " (no ordId yet)\n";
+    if (!order || order->OrdId().empty()) {
+        std::cout << "Quoter: cannot amend " << *cl_ord_id << " (no ordId yet)\n";
+        cl_ord_id.reset();
+        cl_ord_id = PlaceSide(side, px);
+        return;
     }
-    cl_ord_id.reset();
+
+    if (!rate_limiter_.TryAcquire(kAmendOrderOp)) {
+        std::cout << "Quoter: amend rate-limited, skipping this cycle for " << *cl_ord_id << "\n";
+        return;
+    }
+
+    const std::string formatted_px = FormatPrice(px);
+    order->OnAmendRequested();
+    const WsOrderRequest amend =
+        BuildWsAmendOrderMessage(inst_id_code_, order->OrdId(), formatted_px, sz_);
+    ws_client_.Send(amend.message);
+    std::cout << "Quoter: sent amend for " << *cl_ord_id << " new px=" << formatted_px << "\n";
 }
 
-std::string NaiveQuoter::PlaceSide(std::string_view side, double px) {
+std::optional<std::string> NaiveQuoter::PlaceSide(std::string_view side, double px) {
+    if (!rate_limiter_.TryAcquire(kOrderOp)) {
+        std::cout << "Quoter: place rate-limited, skipping this cycle for " << side << "\n";
+        return std::nullopt;
+    }
+
     const OrderRequest request{
         .inst_id = inst_id_,
         .side = std::string(side),

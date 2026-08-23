@@ -49,6 +49,7 @@ add_executable(trading_engine main.cpp config.hpp
         okx/orders/ws_orders.hpp okx/orders/ws_orders.cpp
         okx/connectivity/ws_response_demux.hpp okx/connectivity/ws_response_demux.cpp
         okx/connectivity/heartbeat.hpp okx/connectivity/heartbeat.cpp okx/connectivity/okx_ws_client.hpp okx/connectivity/okx_ws_client.cpp
+        okx/connectivity/rate_limiter.hpp okx/connectivity/rate_limiter.cpp
         okx/marketdata/order_book.hpp okx/marketdata/order_book.cpp okx/marketdata/market_data.hpp okx/marketdata/market_data.cpp
         okx/orders/order_events.hpp okx/orders/order_events.cpp
         okx/orders/order_lifecycle.hpp okx/orders/order_lifecycle.cpp
