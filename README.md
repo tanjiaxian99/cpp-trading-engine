@@ -376,7 +376,7 @@ reconciliation, cancel-all — which is what the Design table already claims it 
 ### B8 · Observability — 3–4 h
 
 - [x] TSC timestamping + log-bucketed latency histogram — **2 h**
-- [ ] Async logger: SPSC ring → writer thread, zero I/O on the hot path — **2 h**
+- [x] Async logger: SPSC ring → writer thread, zero I/O on the hot path — **2 h**
 - [ ] Tick-to-trade harness: wire arrival → order bytes handed to `write()` — **1 h**
 
 ### B9 · Documentation — 2–3 h
