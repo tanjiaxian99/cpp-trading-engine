@@ -2,9 +2,9 @@
 
 #include <cmath>
 #include <format>
-#include <iostream>
 #include <utility>
 
+#include "log/async_logger.hpp"
 #include "okx/common/okx_constants.hpp"
 #include "okx/orders/order_types.hpp"
 #include "okx/orders/ws_orders.hpp"
@@ -61,23 +61,23 @@ void NaiveQuoter::OnFill(const OrderEvent& event) {
     if (!OwnsOrder(event.cl_ord_id)) {
         return;
     }
-    std::cout << "Quoter: fill on " << event.cl_ord_id << " side=" << event.side
-              << " px=" << event.fill_px << " sz=" << event.fill_sz << "\n";
+    Log.Info("Fill on {} side={} px={} sz={}", event.cl_ord_id, event.side, event.fill_px,
+             event.fill_sz);
 }
 
 void NaiveQuoter::OnCancel(const OrderEvent& event) {
     if (!OwnsOrder(event.cl_ord_id)) {
         return;
     }
-    std::cout << "Quoter: cancel on " << event.cl_ord_id << "\n";
+    Log.Info("Cancel on {}", event.cl_ord_id);
 }
 
 void NaiveQuoter::OnOrderRemoved(std::string_view cl_ord_id) {
     if (bid_cl_ord_id_ && *bid_cl_ord_id_ == cl_ord_id) {
-        std::cout << "Quoter: bid " << cl_ord_id << " removed from order_store_\n";
+        Log.Debug("Bid {} removed from order_store_", cl_ord_id);
         bid_cl_ord_id_.reset();
     } else if (ask_cl_ord_id_ && *ask_cl_ord_id_ == cl_ord_id) {
-        std::cout << "Quoter: ask " << cl_ord_id << " removed from order_store_\n";
+        Log.Debug("Ask {} removed from order_store_", cl_ord_id);
         ask_cl_ord_id_.reset();
     }
 }
@@ -121,14 +121,14 @@ void NaiveQuoter::ReplaceSide(std::optional<std::string>& cl_ord_id, std::string
 
     Order* order = order_store_.FindByClOrdId(*cl_ord_id);
     if (!order || order->OrdId().empty()) {
-        std::cout << "Quoter: cannot amend " << *cl_ord_id << " (no ordId yet)\n";
+        Log.Warn("Cannot amend {} (no ordId yet)", *cl_ord_id);
         cl_ord_id.reset();
         cl_ord_id = PlaceSide(side, px);
         return;
     }
 
     if (!rate_limiter_.TryAcquire(kAmendOrderOp)) {
-        std::cout << "Quoter: amend rate-limited, skipping this cycle for " << *cl_ord_id << "\n";
+        Log.Warn("Amend order rate-limited, skipping this cycle for {}", *cl_ord_id);
         return;
     }
 
@@ -137,12 +137,12 @@ void NaiveQuoter::ReplaceSide(std::optional<std::string>& cl_ord_id, std::string
     const WsOrderRequest amend =
         BuildWsAmendOrderMessage(inst_id_code_, order->OrdId(), formatted_px, sz_);
     ws_client_.Send(amend.message);
-    std::cout << "Quoter: sent amend for " << *cl_ord_id << " new px=" << formatted_px << "\n";
+    Log.Debug("Sent amend for {} new px={}", *cl_ord_id, formatted_px);
 }
 
 std::optional<std::string> NaiveQuoter::PlaceSide(std::string_view side, double px) {
     if (!rate_limiter_.TryAcquire(kOrderOp)) {
-        std::cout << "Quoter: place rate-limited, skipping this cycle for " << side << "\n";
+        Log.Warn("Place order rate-limited, skipping this cycle for {}", side);
         return std::nullopt;
     }
 
@@ -157,7 +157,7 @@ std::optional<std::string> NaiveQuoter::PlaceSide(std::string_view side, double 
     const WsOrderRequest order = BuildWsOrderMessage(request);
     order_store_.Add(order.id, inst_id_, std::string(side), request.px, sz_);
     ws_client_.Send(order.message);
-    std::cout << "Quoter: placed " << side << " id=" << order.id << " px=" << request.px << "\n";
+    Log.Info("Placed order {} id={} px={}", side, order.id, request.px);
     return order.id;
 }
 

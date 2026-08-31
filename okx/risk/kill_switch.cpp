@@ -1,10 +1,10 @@
 #include "okx/risk/kill_switch.hpp"
 
-#include <iostream>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "log/async_logger.hpp"
 #include "okx/orders/rest_orders.hpp"
 
 KillSwitch::KillSwitch(RestClient& rest_client, const OkxAuth& auth, OrderStore& order_store)
@@ -15,13 +15,12 @@ void KillSwitch::Trigger(std::string_view reason) {
         return;
     }
     triggered_ = true;
-    std::cerr << "KILL SWITCH triggered: " << reason << "\n";
+    Log.Error("KILL SWITCH triggered: {}", reason);
 
     std::vector<std::pair<std::string, std::string>> to_cancel;  // (inst_id, ord_id)
     order_store_.ForEach([&to_cancel](const Order& order) {
         if (order.OrdId().empty()) {
-            std::cerr << "Kill switch: order " << order.ClOrdId()
-                      << " has no ordId yet, cannot REST-cancel\n";
+            Log.Warn("Order {} has no ordId yet, cannot REST-cancel", order.ClOrdId());
             return;
         }
         to_cancel.emplace_back(order.InstId(), order.OrdId());
@@ -29,7 +28,7 @@ void KillSwitch::Trigger(std::string_view reason) {
 
     for (const auto& [inst_id, ord_id] : to_cancel) {
         const OrderResult result = CancelOrder(rest_client_, auth_, inst_id, ord_id);
-        std::cerr << "kill switch: cancel ordId=" << ord_id << " accepted=" << result.accepted
-                  << " sMsg=" << result.s_msg << "\n";
+        Log.Info("Order cancel status: ordId={} accepted={} sMsg={}", ord_id, result.accepted,
+                 result.s_msg);
     }
 }

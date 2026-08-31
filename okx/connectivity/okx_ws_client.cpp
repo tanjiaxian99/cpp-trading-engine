@@ -1,11 +1,11 @@
 #include "okx/connectivity/okx_ws_client.hpp"
 
 #include <algorithm>
-#include <iostream>
 #include <random>
 #include <stdexcept>
 #include <utility>
 
+#include "log/async_logger.hpp"
 #include "net/websocket_control.hpp"
 #include "net/websocket_handshake.hpp"
 #include "okx/common/okx_constants.hpp"
@@ -66,7 +66,7 @@ void OkxWsClient::Connect() {
         rx_buffer_.clear();
         authenticated_ = false;
 
-        std::cout << "OKX WebSocket connected to " << host_ << path_ << "\n";
+        Log.Info("OKX WebSocket connected to {}{}", host_, path_);
         if (auth_) {
             SendLogin();
         }
@@ -76,7 +76,7 @@ void OkxWsClient::Connect() {
         ScheduleHeartbeat();
         ReadLoop();
     } catch (const std::exception& e) {
-        std::cerr << "OKX WebSocket connect failed: " << e.what() << "\n";
+        Log.Warn("OKX WebSocket connect failed: {}", e.what());
         ScheduleReconnect();
     }
 }
@@ -90,8 +90,7 @@ void OkxWsClient::ScheduleReconnect() {
 
     const auto delay = ComputeBackoff(reconnect_attempt_);
     reconnect_attempt_++;
-    std::cerr << "Reconnecting in " << delay.count() << " ms (attempt " << reconnect_attempt_
-              << ")\n";
+    Log.Warn("Reconnecting in {} ms (attempt {})", delay.count(), reconnect_attempt_);
 
     reconnect_timer_.expires_after(delay);
     reconnect_timer_.async_wait([this](const boost::system::error_code& ec) {
@@ -107,21 +106,21 @@ void OkxWsClient::ReadLoop() {
         return;  // ScheduleReconnect reset the optional but will set it back soon
     }
 
-    transport_->AsyncReadSome(
-        asio::buffer(read_chunk_), [this](const boost::system::error_code& ec, std::size_t n) {
-            if (ec) {
-                std::cerr << "OKX WebSocket read error: " << ec.message() << "\n";
-                ScheduleReconnect();
-                return;
-            }
+    transport_->AsyncReadSome(asio::buffer(read_chunk_),
+                              [this](const boost::system::error_code& ec, std::size_t n) {
+                                  if (ec) {
+                                      Log.Warn("OKX WebSocket read error: {}", ec.message());
+                                      ScheduleReconnect();
+                                      return;
+                                  }
 
-            rx_buffer_.append(read_chunk_.data(), n);
-            while (const auto frame = DecodeFrame(rx_buffer_)) {
-                HandleFrame(*frame);
-                rx_buffer_.erase(0, frame->total_size);
-            }
-            ReadLoop();
-        });
+                                  rx_buffer_.append(read_chunk_.data(), n);
+                                  while (const auto frame = DecodeFrame(rx_buffer_)) {
+                                      HandleFrame(*frame);
+                                      rx_buffer_.erase(0, frame->total_size);
+                                  }
+                                  ReadLoop();
+                              });
 }
 
 void OkxWsClient::HandleFrame(const WebSocketFrame& frame) {
@@ -165,7 +164,7 @@ void OkxWsClient::StartWrite() {
     write_in_flight_ = true;
     auto on_write = [this](const boost::system::error_code& ec, std::size_t bytes_written) {
         if (ec) {
-            std::cerr << "OKX WebSocket write error: " << ec.message() << "\n";
+            Log.Warn("OKX WebSocket write error: {}", ec.message());
             ScheduleReconnect();
             return;
         }
@@ -195,7 +194,7 @@ void OkxWsClient::SendLogin() {
         throw std::runtime_error("OkxWsClient::SendLogin called without auth");
     }
     Send(auth_->BuildWsLoginMessage());
-    std::cout << "Sent WS login request\n";
+    Log.Debug("Sent WS login request");
 }
 
 void OkxWsClient::DispatchMessage(std::string_view message) {

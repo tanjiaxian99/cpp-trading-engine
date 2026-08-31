@@ -1,12 +1,12 @@
 #include "okx/orders/reconciliation.hpp"
 
 #include <format>
-#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
+#include "log/async_logger.hpp"
 #include "okx/common/okx_constants.hpp"
 #include "okx/orders/order_events.hpp"
 #include "util/json.hpp"
@@ -51,15 +51,15 @@ void ReconcileOrders(OrderStore& store, std::string_view pending_orders_response
                 .avg_px = json::FindString(order, kAvgPx).value_or(kEmpty),
             };
 
-            std::cout << "Reconciliation: adopting exchange-known order clOrdId=" << *cl_ord_id
-                      << " state=" << *state << "\n";
+            Log.Warn("Reconciling by adopting exchange-known order clOrdId={} state={}", *cl_ord_id,
+                     *state);
             store.Add(std::string(event.cl_ord_id), std::string(event.inst_id),
                       std::string(event.side), std::string(event.px), std::string(event.sz));
 
             Order* adopted = store.FindByClOrdId(*cl_ord_id);
             if (!adopted) {
                 throw std::runtime_error(std::format(
-                    "Reconciliation: order {} vanished immediately after Add", *cl_ord_id));
+                    "Order {} vanished immediately after Add during reconciliation", *cl_ord_id));
             }
             adopted->ApplyEvent(event);
         });
@@ -72,8 +72,10 @@ void ReconcileOrders(OrderStore& store, std::string_view pending_orders_response
     });
 
     for (const auto& cl_ord_id : to_drop) {
-        std::cout << "Reconciliation: local order clOrdId=" << cl_ord_id
-                  << " no longer pending on exchange, dropping\n";
+        Log.Warn(
+            "Reconciling local order clOrdId={} and found that it is no longer pending on "
+            "exchange, dropping",
+            cl_ord_id);
         store.Remove(cl_ord_id);
     }
 }

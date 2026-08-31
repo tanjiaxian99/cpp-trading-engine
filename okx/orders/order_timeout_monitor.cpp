@@ -1,8 +1,8 @@
 #include "okx/orders/order_timeout_monitor.hpp"
 
 #include <chrono>
-#include <iostream>
 
+#include "log/async_logger.hpp"
 #include "okx/orders/order_lifecycle.hpp"
 #include "okx/orders/reconciliation.hpp"
 #include "okx/orders/rest_orders.hpp"
@@ -39,16 +39,14 @@ void OrderTimeoutMonitor::CheckAndResolve() {
             now - order.PendingSince() <= kOrderUnacknowledgedTimeout) {
             return;
         }
-        std::cerr << "Order " << order.ClOrdId() << " unacknowledged for over "
-                  << kOrderUnacknowledgedTimeout.count() << "s (state=" << ToString(order.State())
-                  << ")\n";
+        Log.Warn("Order {} unacknowledged for over {}s (state={})", order.ClOrdId(),
+                 kOrderUnacknowledgedTimeout.count(), ToString(order.State()));
         any_timed_out = true;
     });
 
     if (any_timed_out) {
         const HttpResponse pending = GetPendingOrders(rest_client_, auth_);
-        std::cout << "Reconciliation triggered by unacknowledged pending orders : " << pending.body
-                  << "\n";
+        Log.Warn("Reconciliation triggered by unacknowledged pending orders: {}", pending.body);
         ReconcileOrders(order_store_, pending.body);
     }
 }

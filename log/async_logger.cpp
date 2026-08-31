@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <format>
 #include <iostream>
 #include <stdexcept>
@@ -16,7 +17,7 @@ AsyncLogger::~AsyncLogger() {
     }
 }
 
-void AsyncLogger::Log(LogLevel level, std::string_view message) {
+void AsyncLogger::Emit(LogLevel level, std::string_view message, std::source_location loc) {
     if (level < min_level) {
         return;
     }
@@ -32,6 +33,7 @@ void AsyncLogger::Log(LogLevel level, std::string_view message) {
 
     Record& record = ring_[tail];
     record.timestamp = std::chrono::system_clock::now();
+    record.function_name = loc.function_name();
     record.level = level;
     const std::size_t n = std::min(message.size(), kMaxMessageLen);
     std::memcpy(record.data.data(), message.data(), n);
@@ -76,10 +78,28 @@ void AsyncLogger::WriterLoop() {
         const auto timestamp_ms =
             std::chrono::time_point_cast<std::chrono::milliseconds>(record.timestamp);
         std::cout << std::format("{:%Y-%m-%d %H:%M:%S}", timestamp_ms) << ' '
-                  << LevelName(record.level) << ' ';
+                  << LevelName(record.level) << ' ' << record.function_name << ' ';
         std::cout.write(record.data.data(), record.len);
         std::cout << '\n';
 
         head_.store((head + 1) % kRingCapacity, std::memory_order_release);
     }
+}
+
+namespace {
+constexpr const char* kLogLevelEnvVar = "ASYNC_LOG_LEVEL";
+
+LogLevel ReadLogLevelFromEnv() {
+    const char* value = std::getenv(kLogLevelEnvVar);
+    if (value == nullptr) {
+        return LogLevel::kInfo;
+    }
+
+    return static_cast<LogLevel>(std::strtol(value, nullptr, 10));
+}
+}  // namespace
+
+AsyncLogger& LoggerInstance() {
+    static AsyncLogger instance(ReadLogLevelFromEnv());
+    return instance;
 }

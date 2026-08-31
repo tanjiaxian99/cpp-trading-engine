@@ -5,12 +5,12 @@
 #include <exception>
 #include <format>
 #include <functional>
-#include <iostream>
 #include <optional>
 #include <stdexcept>
 #include <string>
 
 #include "config.hpp"
+#include "log/async_logger.hpp"
 #include "okx/common/okx_constants.hpp"
 #include "okx/common/response_utils.hpp"
 #include "okx/connectivity/auth.hpp"
@@ -81,20 +81,21 @@ constexpr RateLimit kAmendRateLimit{.capacity = 60, .window = std::chrono::secon
 constexpr auto kQuoterTimerInterval = std::chrono::milliseconds(500);
 
 void LogBookUpdate(const OrderBook& book) {
-    std::cout << "book: bid=" << book.BestBid().value_or(0.0)
-              << " ask=" << book.BestAsk().value_or(0.0) << " seqId=" << book.LastSeqId() << "\n";
+    Log.Debug("Update to orderbook: bid={} ask={} seqId={}", book.BestBid().value_or(0.0),
+              book.BestAsk().value_or(0.0), book.LastSeqId());
 }
 
 void LogOrderEvent(const OrderEvent& event) {
-    std::cout << "order event: type=" << ToString(event.type) << " ordId=" << event.ord_id
-              << " instId=" << event.inst_id << " side=" << event.side << " px=" << event.px
-              << " sz=" << event.sz << " accFillSz=" << event.acc_fill_sz
-              << " avgPx=" << event.avg_px << "\n";
+    Log.Info(
+        "Order event received: type={} ordId={} instId={} side={} px={} sz={} accFillSz={} "
+        "avgPx={}",
+        ToString(event.type), event.ord_id, event.inst_id, event.side, event.px, event.sz,
+        event.acc_fill_sz, event.avg_px);
 }
 
 void LogAccountBalance(const AccountState::Balance& balance) {
-    std::cout << "account: ccy=" << balance.ccy << " cashBal=" << balance.cash_bal
-              << " availBal=" << balance.avail_bal << "\n";
+    Log.Debug("Current account balance: ccy={} cashBal={} availBal={}", balance.ccy,
+              balance.cash_bal, balance.avail_bal);
 }
 
 bool IsRequestAccepted(std::string_view response) {
@@ -132,11 +133,10 @@ public:
 
     void Start() {
         if (!ws_client_.IsConnected()) {
-            std::cout << "private WS down — falling back to REST for order placement\n";
+            Log.Warn("Private WS is down, falling back to REST for order placement");
             const OrderResult result = PlaceOrder(rest_client_, auth_, order_request_);
-            std::cout << "REST fallback place order: accepted=" << result.accepted
-                      << " ordId=" << result.ord_id << " sCode=" << result.s_code
-                      << " sMsg=" << result.s_msg << "\n";
+            Log.Info("REST fallback order placement: accepted={} ordId={} sCode={} sMsg={}",
+                     result.accepted, result.ord_id, result.s_code, result.s_msg);
             if (result.accepted) {
                 ord_id_ = result.ord_id;
                 FallBackToRestCancel();
@@ -149,7 +149,7 @@ public:
         order_store_.Add(order.id, order_request_.inst_id, order_request_.side, order_request_.px,
                          order_request_.sz);
         ws_client_.Send(order.message);
-        std::cout << "sent WS order request id=" << order.id << "\n";
+        Log.Debug("Sent WS order request id={}", order.id);
         demux_.Track(order.id, [this](std::string_view response) { OnOrderResponse(response); });
     }
 
@@ -160,7 +160,7 @@ public:
         }
 
         order->ApplyEvent(event);
-        std::cout << "order state: " << ToString(order->State()) << "\n";
+        Log.Debug("New order state={} after applying event", ToString(order->State()));
         if (IsTerminal(order->State())) {
             order_store_.Remove(order->ClOrdId());
         }
@@ -176,13 +176,13 @@ private:
     }
 
     void OnOrderResponse(std::string_view response) {
-        std::cout << "WS order response: " << response << "\n";
+        Log.Debug("WS order response: {}", response);
         if (!IsRequestAccepted(response)) {
             // Rejected before ever existing on the exchange — Order has no
             // transition for this from kPendingNew. Leave it for
             // reconciliation/timeout cleanup rather than proceeding to
             // amend/cancel an order that was never placed.
-            std::cout << "order placement rejected, leaving cleanup to reconciliation\n";
+            Log.Warn("Order placement rejected, cleanup will be done by reconciliation");
             return;
         }
         const auto data = FindData(response);
@@ -201,15 +201,16 @@ private:
         const WsOrderRequest amend = BuildWsAmendOrderMessage(order_request_.inst_id_code, ord_id_,
                                                               kSmokeTestAmendPx, order_request_.sz);
         ws_client_.Send(amend.message);
-        std::cout << "sent WS amend-order request id=" << amend.id << "\n";
+        Log.Debug("Sent WS amend-order request id={}", amend.id);
         demux_.Track(amend.id, [this](std::string_view response) { OnAmendResponse(response); });
     }
 
     void OnAmendResponse(std::string_view response) {
-        std::cout << "WS amend-order response: " << response << "\n";
+        Log.Debug("WS amend-order response: {}", response);
         if (!IsRequestAccepted(response)) {
             GetOrder().OnRequestRejected();
-            std::cout << "order state: " << ToString(GetOrder().State()) << "\n";
+            Log.Warn("New order state={} upon amend request rejection",
+                     ToString(GetOrder().State()));
         }
 
         if (!ws_client_.IsConnected()) {
@@ -221,24 +222,25 @@ private:
         const WsOrderRequest cancel =
             BuildWsCancelOrderMessage(order_request_.inst_id_code, ord_id_);
         ws_client_.Send(cancel.message);
-        std::cout << "sent WS cancel-order request id=" << cancel.id << "\n";
+        Log.Debug("Sent WS cancel-order request id={}", cancel.id);
         demux_.Track(cancel.id, [this](std::string_view response) { OnCancelResponse(response); });
     }
 
     void OnCancelResponse(std::string_view response) {
-        std::cout << "WS cancel-order response: " << response << "\n";
+        Log.Debug("WS cancel-order response: {}", response);
         if (!IsRequestAccepted(response)) {
             GetOrder().OnRequestRejected();
-            std::cout << "order state: " << ToString(GetOrder().State()) << "\n";
+            Log.Warn("New order state={} upon cancel request rejection",
+                     ToString(GetOrder().State()));
         }
     }
 
     void FallBackToRestCancel() {
-        std::cout << "private WS down — falling back to REST for cancel\n";
+        Log.Warn("Private WS is down, falling back to REST for order cancellation");
         const OrderResult result =
             CancelOrder(rest_client_, auth_, order_request_.inst_id, ord_id_);
-        std::cout << "REST fallback cancel order: accepted=" << result.accepted
-                  << " sCode=" << result.s_code << " sMsg=" << result.s_msg << "\n";
+        Log.Info("REST fallback order cancellation: accepted={} sCode={} sMsg={}", result.accepted,
+                 result.s_code, result.s_msg);
     }
 
     OkxWsClient& ws_client_;
@@ -255,21 +257,20 @@ private:
 int main() {
     try {
         const Config config = Config::FromEnv();
-        std::cout << "loaded config for key " << config.api_key << "\n";
+        Log.Info("Loaded config for key {}", config.api_key);
 
         RestClient rest_client{std::string(kOkxRestBaseUrl)};
 
         // Public, unauthenticated endpoint — also used below for the clock
         // drift check A3 requires before signed requests can be trusted.
         const HttpResponse time_response = rest_client.Get("/api/v5/public/time");
-        std::cout << "REST status " << time_response.status_code << ": " << time_response.body
-                  << "\n";
+        Log.Debug("REST status {}: {}", time_response.status_code, time_response.body);
 
         const long long server_time_ms = ExtractTimestampMs(time_response.body);
         const auto local_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                        std::chrono::system_clock::now().time_since_epoch())
                                        .count();
-        std::cout << "clock drift: " << (local_time_ms - server_time_ms) << " ms\n";
+        Log.Info("Clock drift: {} ms", local_time_ms - server_time_ms);
 
         // Signed request — proves the A3 auth/signing path end-to-end.
         using enum HttpMethod;
@@ -277,14 +278,12 @@ int main() {
         const std::string balance_path = "/api/v5/account/balance";
         const HttpResponse balance_response =
             rest_client.Get(balance_path, auth.SignHeaders(kGet, balance_path));
-        std::cout << "balance status " << balance_response.status_code << ": "
-                  << balance_response.body << "\n";
+        Log.Debug("Balance status {}: {}", balance_response.status_code, balance_response.body);
 
         // Public, unauthenticated endpoint — proves instrument-spec fetch
         // and parsing end-to-end.
         const InstrumentSpec spec = FetchInstrumentSpec(rest_client, kBtcUsdt);
-        std::cout << "BTC-USDT: tickSz=" << spec.tick_sz << " lotSz=" << spec.lot_sz
-                  << " minSz=" << spec.min_sz << "\n";
+        Log.Info("BTC-USDT: tickSz={} lotSz={} minSz={}", spec.tick_sz, spec.lot_sz, spec.min_sz);
 
         // This demo account only has ETH-USDT enabled for trading — the
         // quoter runs on ETH-USDT below rather than BTC-USDT for that
@@ -292,7 +291,7 @@ int main() {
         const InstrumentSpec eth_spec = FetchInstrumentSpec(rest_client, kEthUsdt);
 
         const long long eth_usdt_inst_id_code = FetchInstIdCode(rest_client, auth, kEthUsdt);
-        std::cout << "ETH-USDT instIdCode=" << eth_usdt_inst_id_code << "\n";
+        Log.Info("ETH-USDT instIdCode={}", eth_usdt_inst_id_code);
 
         const OrderRequest order_request{
             .inst_id = std::string(kEthUsdt),
@@ -303,16 +302,14 @@ int main() {
             .inst_id_code = eth_usdt_inst_id_code,
         };
         const OrderResult place_result = PlaceOrder(rest_client, auth, order_request);
-        std::cout << "place order: accepted=" << place_result.accepted
-                  << " ordId=" << place_result.ord_id << " sCode=" << place_result.s_code
-                  << " sMsg=" << place_result.s_msg << "\n";
+        Log.Info("Place order result: accepted={} ordId={} sCode={} sMsg={}", place_result.accepted,
+                 place_result.ord_id, place_result.s_code, place_result.s_msg);
 
         if (place_result.accepted) {
             const OrderResult cancel_result =
                 CancelOrder(rest_client, auth, order_request.inst_id, place_result.ord_id);
-            std::cout << "cancel order: accepted=" << cancel_result.accepted
-                      << " sCode=" << cancel_result.s_code << " sMsg=" << cancel_result.s_msg
-                      << "\n";
+            Log.Info("Cancel order result: accepted={} sCode={} sMsg={}", cancel_result.accepted,
+                     cancel_result.s_code, cancel_result.s_msg);
         }
 
         asio::io_context io_context;
@@ -337,7 +334,7 @@ int main() {
 
         ws_client.SetOnConnected([&ws_client, &subscribe_msg]() {
             ws_client.Send(subscribe_msg);
-            std::cout << "sent books+trades subscribe request\n";
+            Log.Info("Sent books and trades WS subscribe request");
         });
         ws_client.SetOnMessage([&order_book, &ws_client, &books_unsubscribe_msg,
                                 &books_subscribe_msg, &quoter, &kill_switch,
@@ -350,13 +347,13 @@ int main() {
                     }
                     break;
                 case BookMessageResult::kGapDetected:
-                    std::cerr << "Order book sequence gap detected — resubscribing for a fresh "
-                                 "snapshot\n";
+                    Log.Warn(
+                        "Order book sequence gap detected — resubscribing for a fresh snapshot");
                     ws_client.Send(books_unsubscribe_msg);
                     ws_client.Send(books_subscribe_msg);
                     break;
                 case BookMessageResult::kIgnored:
-                    std::cout << "WS message: " << message << "\n";
+                    Log.Debug("WS message is ignored: {}", message);
                     break;
             }
         });
@@ -400,24 +397,23 @@ int main() {
                                         &quoter](std::string_view message) {
             if (json::FindString(message, kEvent) == kLoginEvent) {
                 const auto code = json::FindString(message, kCode).value_or(kEmpty);
-                std::cout << "private WS login: code=" << code
-                          << " msg=" << json::FindString(message, kMsg).value_or(kEmpty) << "\n";
+                Log.Info("Private WS login: code={} msg={}", code,
+                         json::FindString(message, kMsg).value_or(kEmpty));
                 if (code == kSuccessCode) {
                     private_ws_client.Send(std::string(kPrivateSubscribeMsg));
-                    std::cout << "sent orders/account/positions subscribe request\n";
+                    Log.Info("Sent orders, account and positions WS subscribe request");
 
                     const HttpResponse pending = GetPendingOrders(rest_client, auth);
-                    std::cout << "pending orders reconciliation: " << pending.body << "\n";
+                    Log.Debug("Pending orders reconciliation: {}", pending.body);
                     ReconcileOrders(order_store, pending.body);
 
                     if (kill_switch.IsTriggered()) {
-                        std::cout << "Kill switch is triggered so we will skip order placement\n";
+                        Log.Warn("Kill switch is triggered so we will skip order placement");
                     } else {
                         const RiskCheckResult risk_check = CheckPreTradeRisk(
                             kRiskLimits, order_request, order_store, std::nullopt);
                         if (!risk_check.passed) {
-                            std::cout << "Pre-trade risk check failed: " << risk_check.reason
-                                      << "\n";
+                            Log.Warn("Pre-trade risk check failed: {}", risk_check.reason);
                         } else {
                             order_round_trip.Start();
                         }
@@ -440,9 +436,8 @@ int main() {
                         quoter.OnFill(event);
                         position.ApplyFill(event.side, json::ParseDouble(event.fill_px),
                                            json::ParseDouble(event.fill_sz));
-                        std::cout << "Position: netQty=" << position.NetQty()
-                                  << " avgEntryPx=" << position.AvgEntryPx()
-                                  << " realizedPnl=" << position.RealizedPnl() << "\n";
+                        Log.Info("Current position: netQty={} avgEntryPx={} realizedPnl={}",
+                                 position.NetQty(), position.AvgEntryPx(), position.RealizedPnl());
                         if (position.RealizedPnl() < -kMaxRealizedLoss) {
                             kill_switch.Trigger("max realized loss breached");
                         }
@@ -454,9 +449,11 @@ int main() {
                 });
             } else if (channel == kAccountChannel) {
                 account_state.ApplyMessage(message);
-                account_state.ForEachBalance(LogAccountBalance);
+                account_state.ForEachBalance(
+                    [](const AccountState::Balance& balance) { LogAccountBalance(balance); });
             } else {
-                std::cout << "private WS message: " << message << "\n";
+                Log.Debug("Private WS message from neither orders nor account channel: {}",
+                          message);
             }
         });
 
@@ -465,7 +462,7 @@ int main() {
         io_context.run();
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "fatal: " << e.what() << "\n";
+        Log.Error("Fatal exception causing main to crash: {}", e.what());
         return 1;
     }
 }

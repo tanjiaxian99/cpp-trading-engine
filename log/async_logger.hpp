@@ -4,14 +4,28 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <format>
+#include <source_location>
 #include <string_view>
 #include <thread>
+#include <type_traits>
+#include <utility>
 
 enum class LogLevel : std::uint8_t {
     kDebug,
     kInfo,
     kWarn,
     kError,
+};
+
+template <typename... Args>
+struct LogFmt {
+    std::format_string<Args...> fmt;
+    std::source_location loc;
+
+    template <typename T>
+    consteval LogFmt(const T& fmt, std::source_location loc = std::source_location::current())
+        : fmt(fmt), loc(loc) {}
 };
 
 class AsyncLogger {
@@ -24,18 +38,7 @@ public:
     AsyncLogger(AsyncLogger&&) = delete;
     AsyncLogger& operator=(AsyncLogger&&) = delete;
 
-    void Debug(std::string_view message) {
-        Log(LogLevel::kDebug, message);
-    }
-    void Info(std::string_view message) {
-        Log(LogLevel::kInfo, message);
-    }
-    void Warn(std::string_view message) {
-        Log(LogLevel::kWarn, message);
-    }
-    void Error(std::string_view message) {
-        Log(LogLevel::kError, message);
-    }
+    void Emit(LogLevel level, std::string_view message, std::source_location loc);
 
 private:
     static constexpr std::size_t kRingCapacity = 4096;
@@ -44,14 +47,13 @@ private:
 
     struct Record {
         std::chrono::system_clock::time_point timestamp;
+        std::string_view function_name;
         LogLevel level = LogLevel::kInfo;
         std::uint16_t len = 0;
         std::array<char, kMaxMessageLen> data{};
     };
 
     [[nodiscard]] static std::string_view LevelName(LogLevel level);
-
-    void Log(LogLevel level, std::string_view message);
 
     void WriterLoop();
 
@@ -65,3 +67,32 @@ private:
     std::atomic<bool> running_{true};
     std::thread writer_thread_;
 };
+
+[[nodiscard]] AsyncLogger& LoggerInstance();
+
+struct LogProxy {
+    // The compiler can't deduce Args from fmt which is just a string, so we use
+    // std::type_identity_t to tell the compiler to skip this parameter for type deduction
+    template <typename... Args>
+    void Debug(LogFmt<std::type_identity_t<Args>...> fmt, Args&&... args) const {
+        LoggerInstance().Emit(LogLevel::kDebug, std::format(fmt.fmt, std::forward<Args>(args)...),
+                              fmt.loc);
+    }
+    template <typename... Args>
+    void Info(LogFmt<std::type_identity_t<Args>...> fmt, Args&&... args) const {
+        LoggerInstance().Emit(LogLevel::kInfo, std::format(fmt.fmt, std::forward<Args>(args)...),
+                              fmt.loc);
+    }
+    template <typename... Args>
+    void Warn(LogFmt<std::type_identity_t<Args>...> fmt, Args&&... args) const {
+        LoggerInstance().Emit(LogLevel::kWarn, std::format(fmt.fmt, std::forward<Args>(args)...),
+                              fmt.loc);
+    }
+    template <typename... Args>
+    void Error(LogFmt<std::type_identity_t<Args>...> fmt, Args&&... args) const {
+        LoggerInstance().Emit(LogLevel::kError, std::format(fmt.fmt, std::forward<Args>(args)...),
+                              fmt.loc);
+    }
+};
+
+inline constexpr LogProxy Log;

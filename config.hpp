@@ -1,8 +1,8 @@
 #pragma once
 
-#include <cstdlib>
-#include <iostream>
 #include <string>
+
+#include "log/async_logger.hpp"
 
 struct Config {
     std::string api_key;
@@ -25,7 +25,7 @@ private:
     static std::string ReadRequired(const char* name) {
         const char* value = std::getenv(name);
         if (value == nullptr || value[0] == '\0') {
-            std::cerr << "Missing required environment variable: " << name << "\n";
+            Log.Error("Missing required environment variable: {}", name);
             std::exit(1);
         }
         return {value};
