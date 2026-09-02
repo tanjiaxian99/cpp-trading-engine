@@ -33,6 +33,9 @@ public:
     [[nodiscard]] bool IsAuthenticated() const {
         return authenticated_;
     }
+    [[nodiscard]] std::uint64_t LastMessageArrivalTicks() const {
+        return last_message_arrival_ticks_;
+    }
 
 private:
     static constexpr std::size_t kReadChunkSize = 4096;
@@ -63,6 +66,7 @@ private:
 
     std::array<char, kReadChunkSize> read_chunk_{};
     std::string rx_buffer_;
+    std::uint64_t last_message_arrival_ticks_ = 0;
     RingBuffer<kTxRingCapacity> tx_ring_;
     bool write_in_flight_ = false;
     WebSocketReassembler<kMaxMessageSize> reassembler_;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -9,6 +10,7 @@
 #include "okx/connectivity/rate_limiter.hpp"
 #include "okx/orders/order_store.hpp"
 #include "okx/strategy/strategy.hpp"
+#include "perf/latency_histogram.hpp"
 
 class NaiveQuoter : public Strategy {
 public:
@@ -16,17 +18,23 @@ public:
                 std::string inst_id, long long inst_id_code, std::string sz,
                 std::string_view tick_sz, double quote_bps, double requote_threshold_bps);
 
-    void OnBookUpdate(const OrderBook& book) override;
+    void OnBookUpdate(const OrderBook& book, std::uint64_t wire_arrival_ticks) override;
     void OnFill(const OrderEvent& event) override;
     void OnCancel(const OrderEvent& event) override;
     void OnTimer() override;
     void OnOrderRemoved(std::string_view cl_ord_id);
 
+    [[nodiscard]] const LatencyHistogram& TickToTradeHistogram() const {
+        return tick_to_trade_histogram_;
+    }
+
 private:
-    void Requote(double mid);
-    void EnsureQuoted(double mid);
-    void ReplaceSide(std::optional<std::string>& cl_ord_id, std::string_view side, double px);
-    std::optional<std::string> PlaceSide(std::string_view side, double px);
+    void Requote(double mid, std::uint64_t wire_arrival_ticks);
+    void ReplaceSide(std::optional<std::string>& cl_ord_id, std::string_view side, double px,
+                     std::uint64_t wire_arrival_ticks);
+    std::optional<std::string> PlaceSide(std::string_view side, double px,
+                                         std::optional<std::uint64_t> wire_arrival_ticks);
+    void RecordTickToTrade(std::optional<std::uint64_t> wire_arrival_ticks);
     [[nodiscard]] std::string FormatPrice(double px) const;
     [[nodiscard]] std::pair<double, double> ComputeQuotePrices(double mid) const;
     [[nodiscard]] bool OwnsOrder(std::string_view cl_ord_id) const;
@@ -45,4 +53,5 @@ private:
     std::optional<double> last_quoted_mid_;
     std::optional<std::string> bid_cl_ord_id_;
     std::optional<std::string> ask_cl_ord_id_;
+    LatencyHistogram tick_to_trade_histogram_;
 };

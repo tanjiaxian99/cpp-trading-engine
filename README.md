@@ -377,7 +377,18 @@ reconciliation, cancel-all — which is what the Design table already claims it 
 
 - [x] TSC timestamping + log-bucketed latency histogram — **2 h**
 - [x] Async logger: SPSC ring → writer thread, zero I/O on the hot path — **2 h**
-- [ ] Tick-to-trade harness: wire arrival → order bytes handed to `write()` — **1 h**
+- [x] Tick-to-trade harness: wire arrival → order bytes handed to `write()` — **1 h**
+
+> Boundary: `perf::ReadCounter()` taken at the socket read completion that delivers a book
+> update (`OkxWsClient::ReadLoop`, before frame decode so decode cost is included), to
+> immediately after the `OkxWsClient::Send` call returns for the resulting order/amend
+> request in `NaiveQuoter` (after frame encode so encode cost is included too — stopping the
+> clock before `Send()` would have silently excluded WS framing/masking). Only book updates
+> that actually cause a place or amend are recorded — the timer-driven `EnsureQuoted` path
+> has no wire event to measure from and is excluded. `NaiveQuoter::TickToTradeHistogram()`
+> accumulates for the life of the process; percentiles are logged on shutdown
+> (`SIGINT`/`SIGTERM`). Filling in the README's benchmark table with real numbers from a live
+> run is B9's job, not this one's.
 
 ### B9 · Documentation — 2–3 h
 

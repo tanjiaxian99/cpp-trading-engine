@@ -33,6 +33,7 @@
 #include "okx/risk/position.hpp"
 #include "okx/risk/risk.hpp"
 #include "okx/strategy/naive_quoter.hpp"
+#include "perf/latency_histogram.hpp"
 #include "rest/rest_client.hpp"
 #include "util/json.hpp"
 
@@ -343,7 +344,7 @@ int main() {
                 case BookMessageResult::kApplied:
                     LogBookUpdate(order_book);
                     if (!kill_switch.IsTriggered() && private_ws_client.IsAuthenticated()) {
-                        quoter.OnBookUpdate(order_book);
+                        quoter.OnBookUpdate(order_book, ws_client.LastMessageArrivalTicks());
                     }
                     break;
                 case BookMessageResult::kGapDetected:
@@ -383,10 +384,16 @@ int main() {
 
         asio::signal_set shutdown_signals(io_context, SIGINT, SIGTERM);
         shutdown_signals.async_wait(
-            [&io_context, &kill_switch](const boost::system::error_code& ec, int) {
+            [&io_context, &kill_switch, &quoter](const boost::system::error_code& ec, int) {
                 if (ec) {
                     return;
                 }
+
+                const LatencyHistogram& tick_to_trade = quoter.TickToTradeHistogram();
+                Log.Info("Tick-to-trade: count={} p50={} ns p99={} ns p99.9={} ns max={} ns",
+                         tick_to_trade.Count(), tick_to_trade.Percentile(0.5),
+                         tick_to_trade.Percentile(0.99), tick_to_trade.Percentile(0.999),
+                         tick_to_trade.Max());
                 kill_switch.Trigger("manual (signal)");
                 io_context.stop();
             });

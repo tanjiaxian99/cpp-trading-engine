@@ -10,6 +10,7 @@
 #include "net/websocket_handshake.hpp"
 #include "okx/common/okx_constants.hpp"
 #include "okx/connectivity/heartbeat.hpp"
+#include "perf/clock.hpp"
 #include "util/json.hpp"
 
 namespace {
@@ -114,6 +115,7 @@ void OkxWsClient::ReadLoop() {
                                       return;
                                   }
 
+                                  last_message_arrival_ticks_ = perf::ReadCounter();
                                   rx_buffer_.append(read_chunk_.data(), n);
                                   while (const auto frame = DecodeFrame(rx_buffer_)) {
                                       HandleFrame(*frame);
