@@ -62,8 +62,8 @@ void NaiveQuoter::OnFill(const OrderEvent& event) {
     if (!OwnsOrder(event.cl_ord_id)) {
         return;
     }
-    Log.Info("Fill on {} side={} px={} sz={}", event.cl_ord_id, event.side, *event.fill_px,
-             *event.fill_sz);
+    Log.Info("Fill on {} side={} px={} sz={}", event.cl_ord_id, event.side, event.fill->px,
+             event.fill->sz);
 }
 
 void NaiveQuoter::OnCancel(const OrderEvent& event) {

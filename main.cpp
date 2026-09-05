@@ -82,6 +82,7 @@ constexpr RateLimit kOrderRateLimit{.capacity = 60, .window = std::chrono::secon
 constexpr RateLimit kCancelRateLimit{.capacity = 60, .window = std::chrono::seconds(2)};
 constexpr RateLimit kAmendRateLimit{.capacity = 60, .window = std::chrono::seconds(2)};
 constexpr auto kQuoterTimerInterval = std::chrono::milliseconds(500);
+constexpr auto kStatsLogInterval = std::chrono::minutes(5);
 
 void LogBookUpdate(const OrderBook& book) {
     Log.Debug("Update to orderbook: bid={} ask={} seqId={}", book.BestBid().value_or(0.0),
@@ -258,6 +259,7 @@ private:
 }  // namespace
 
 int main() {
+    TickToTradeStats tick_to_trade_stats;
     try {
         const Config config = Config::FromEnv();
         Log.Info("Loaded config for key {}", config.api_key);
@@ -323,7 +325,6 @@ int main() {
 
         OrderBook order_book;
         OrderStore order_store;
-        TickToTradeStats tick_to_trade_stats;
         KillSwitch kill_switch(rest_client, auth, order_store);
         EndpointRateLimiter rate_limiter(kOrderRateLimit, kCancelRateLimit, kAmendRateLimit);
         NaiveQuoter quoter(private_ws_client, order_store, rate_limiter, std::string(kEthUsdt),
@@ -385,9 +386,12 @@ int main() {
         Position position;
 
         asio::steady_timer quoter_timer(io_context);
-        std::function<void()> schedule_quoter_timer = [&]() {
+        std::function<void()> schedule_quoter_timer = [&quoter_timer, &schedule_quoter_timer,
+                                                       &kill_switch, &private_ws_client,
+                                                       &quoter]() {
             quoter_timer.expires_after(kQuoterTimerInterval);
-            quoter_timer.async_wait([&](const boost::system::error_code& ec) {
+            quoter_timer.async_wait([&kill_switch, &private_ws_client, &quoter,
+                                     &schedule_quoter_timer](const boost::system::error_code& ec) {
                 if (ec) {
                     return;
                 }
@@ -398,6 +402,21 @@ int main() {
             });
         };
         schedule_quoter_timer();
+
+        asio::steady_timer stats_log_timer(io_context);
+        std::function<void()> schedule_stats_log_timer =
+            [&stats_log_timer, &schedule_stats_log_timer, &tick_to_trade_stats]() {
+                stats_log_timer.expires_after(kStatsLogInterval);
+                stats_log_timer.async_wait([&tick_to_trade_stats, &schedule_stats_log_timer](
+                                               const boost::system::error_code& ec) {
+                    if (ec) {
+                        return;
+                    }
+                    tick_to_trade_stats.LogSummary();
+                    schedule_stats_log_timer();
+                });
+            };
+        schedule_stats_log_timer();
 
         asio::signal_set shutdown_signals(io_context, SIGINT, SIGTERM);
         shutdown_signals.async_wait([&io_context, &kill_switch, &tick_to_trade_stats](
@@ -453,10 +472,9 @@ int main() {
                     LogOrderEvent(event);
                     if (event.type == OrderEventType::kFill ||
                         event.type == OrderEventType::kPartialFill) {
-                        if (event.fill_px && event.fill_sz) {
+                        if (event.fill) {
                             quoter.OnFill(event);
-                            position.ApplyFill(event.side, json::ParseDouble(*event.fill_px),
-                                               json::ParseDouble(*event.fill_sz));
+                            position.ApplyFill(event.side, event.fill->px, event.fill->sz);
                             Log.Info("Current position: netQty={} avgEntryPx={} realizedPnl={}",
                                      position.NetQty(), position.AvgEntryPx(),
                                      position.RealizedPnl());
@@ -490,6 +508,7 @@ int main() {
         return 0;
     } catch (const std::exception& e) {
         Log.Error("Fatal exception causing main to crash: {}", e.what());
+        tick_to_trade_stats.LogSummary();
         return 1;
     }
 }

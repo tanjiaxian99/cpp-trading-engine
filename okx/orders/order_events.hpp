@@ -12,6 +12,11 @@ enum class OrderEventType : std::uint8_t {
     kCancel,
 };
 
+struct OrderFill {
+    double px;
+    double sz;
+};
+
 struct OrderEvent {
     OrderEventType type;
     std::string_view ord_id;
@@ -22,8 +27,7 @@ struct OrderEvent {
     std::string_view sz;
     std::string_view acc_fill_sz;
     std::string_view avg_px;
-    std::optional<std::string_view> fill_px;
-    std::optional<std::string_view> fill_sz;
+    std::optional<OrderFill> fill;
 };
 
 void ForEachOrderEvent(std::string_view message,

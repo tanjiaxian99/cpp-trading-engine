@@ -22,6 +22,30 @@ OrderEventType ClassifyState(std::string_view state) {
     }
     throw std::runtime_error(std::format("Unrecognized order state: {}", state));
 }
+
+std::optional<OrderFill> ClassifyFill(std::string_view order) {
+    const auto fill_px_str = json::FindString(order, kFillPx);
+    if (!fill_px_str || fill_px_str->empty()) {
+        return std::nullopt;
+    }
+
+    const double fill_px = json::ParseDouble(*fill_px_str);
+    if (fill_px <= 0.0) {
+        return std::nullopt;
+    }
+
+    const auto fill_sz_str = json::FindString(order, kFillSz);
+    if (!fill_sz_str || fill_sz_str->empty()) {
+        return std::nullopt;
+    }
+
+    const double fill_sz = json::ParseDouble(*fill_sz_str);
+    if (fill_sz <= 0.0) {
+        return std::nullopt;
+    }
+
+    return OrderFill{.px = fill_px, .sz = fill_sz};
+}
 }  // namespace
 
 void ForEachOrderEvent(std::string_view message,
@@ -46,8 +70,7 @@ void ForEachOrderEvent(std::string_view message,
             .sz = json::FindString(order, kSz).value_or(kEmpty),
             .acc_fill_sz = json::FindString(order, kAccFillSz).value_or(kEmpty),
             .avg_px = json::FindString(order, kAvgPx).value_or(kEmpty),
-            .fill_px = json::FindString(order, kFillPx),
-            .fill_sz = json::FindString(order, kFillSz),
+            .fill = ClassifyFill(order),
         };
         action(event);
     });
