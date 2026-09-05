@@ -33,7 +33,9 @@
 #include "okx/risk/position.hpp"
 #include "okx/risk/risk.hpp"
 #include "okx/strategy/naive_quoter.hpp"
-#include "perf/latency_histogram.hpp"
+#include "perf/clock.hpp"
+#include "perf/tick_to_trade_stats.hpp"
+#include "perf/tick_to_trade_trace.hpp"
 #include "rest/rest_client.hpp"
 #include "util/json.hpp"
 
@@ -321,6 +323,7 @@ int main() {
 
         OrderBook order_book;
         OrderStore order_store;
+        TickToTradeStats tick_to_trade_stats;
         KillSwitch kill_switch(rest_client, auth, order_store);
         EndpointRateLimiter rate_limiter(kOrderRateLimit, kCancelRateLimit, kAmendRateLimit);
         NaiveQuoter quoter(private_ws_client, order_store, rate_limiter, std::string(kEthUsdt),
@@ -328,6 +331,10 @@ int main() {
                            kQuoterBps, kRequoteThresholdBps);
         order_store.SetOnRemove(
             [&quoter](std::string_view cl_ord_id) { quoter.OnOrderRemoved(cl_ord_id); });
+
+        private_ws_client.SetOnTraceResolved([&tick_to_trade_stats](const TickToTradeTrace& trace) {
+            tick_to_trade_stats.Record(trace);
+        });
 
         const std::string subscribe_msg = std::format(kBooksSubscribeFormat, kEthUsdt);
         const std::string books_unsubscribe_msg = std::format(kBooksUnsubscribeFormat, kEthUsdt);
@@ -340,13 +347,23 @@ int main() {
         ws_client.SetOnMessage([&order_book, &ws_client, &books_unsubscribe_msg,
                                 &books_subscribe_msg, &quoter, &kill_switch,
                                 &private_ws_client](std::string_view message) {
+            const std::uint64_t wire_arrival_ticks = ws_client.LastMessageArrivalTicks();
+            const std::uint64_t message_decoded_ticks = ws_client.LastMessageDecodedTicks();
+
             switch (ApplyBookMessage(message, order_book)) {
-                case BookMessageResult::kApplied:
+                case BookMessageResult::kApplied: {
+                    const std::uint64_t book_consistent_ticks = perf::ReadCounter();
                     LogBookUpdate(order_book);
                     if (!kill_switch.IsTriggered() && private_ws_client.IsAuthenticated()) {
-                        quoter.OnBookUpdate(order_book, ws_client.LastMessageArrivalTicks());
+                        quoter.OnBookUpdate(order_book,
+                                            TickToTradeTrace{
+                                                .wire_arrival_ticks = wire_arrival_ticks,
+                                                .message_decoded_ticks = message_decoded_ticks,
+                                                .book_consistent_ticks = book_consistent_ticks,
+                                            });
                     }
                     break;
+                }
                 case BookMessageResult::kGapDetected:
                     Log.Warn(
                         "Order book sequence gap detected — resubscribing for a fresh snapshot");
@@ -383,20 +400,16 @@ int main() {
         schedule_quoter_timer();
 
         asio::signal_set shutdown_signals(io_context, SIGINT, SIGTERM);
-        shutdown_signals.async_wait(
-            [&io_context, &kill_switch, &quoter](const boost::system::error_code& ec, int) {
-                if (ec) {
-                    return;
-                }
+        shutdown_signals.async_wait([&io_context, &kill_switch, &tick_to_trade_stats](
+                                        const boost::system::error_code& ec, int) {
+            if (ec) {
+                return;
+            }
 
-                const LatencyHistogram& tick_to_trade = quoter.TickToTradeHistogram();
-                Log.Info("Tick-to-trade: count={} p50={} ns p99={} ns p99.9={} ns max={} ns",
-                         tick_to_trade.Count(), tick_to_trade.Percentile(0.5),
-                         tick_to_trade.Percentile(0.99), tick_to_trade.Percentile(0.999),
-                         tick_to_trade.Max());
-                kill_switch.Trigger("manual (signal)");
-                io_context.stop();
-            });
+            tick_to_trade_stats.LogSummary();
+            kill_switch.Trigger("manual (signal)");
+            io_context.stop();
+        });
 
         private_ws_client.SetOnMessage([&private_ws_client, &rest_client, &auth, &account_state,
                                         &ws_demux, &order_round_trip, &order_store, &kill_switch,
@@ -440,13 +453,20 @@ int main() {
                     LogOrderEvent(event);
                     if (event.type == OrderEventType::kFill ||
                         event.type == OrderEventType::kPartialFill) {
-                        quoter.OnFill(event);
-                        position.ApplyFill(event.side, json::ParseDouble(event.fill_px),
-                                           json::ParseDouble(event.fill_sz));
-                        Log.Info("Current position: netQty={} avgEntryPx={} realizedPnl={}",
-                                 position.NetQty(), position.AvgEntryPx(), position.RealizedPnl());
-                        if (position.RealizedPnl() < -kMaxRealizedLoss) {
-                            kill_switch.Trigger("max realized loss breached");
+                        if (event.fill_px && event.fill_sz) {
+                            quoter.OnFill(event);
+                            position.ApplyFill(event.side, json::ParseDouble(*event.fill_px),
+                                               json::ParseDouble(*event.fill_sz));
+                            Log.Info("Current position: netQty={} avgEntryPx={} realizedPnl={}",
+                                     position.NetQty(), position.AvgEntryPx(),
+                                     position.RealizedPnl());
+                            if (position.RealizedPnl() < -kMaxRealizedLoss) {
+                                kill_switch.Trigger("Max realized loss breached");
+                            }
+                        } else {
+                            Log.Debug(
+                                "Fill-state order event with no new fill data (state resend), "
+                                "ignoring");
                         }
                     } else if (event.type == OrderEventType::kCancel) {
                         quoter.OnCancel(event);

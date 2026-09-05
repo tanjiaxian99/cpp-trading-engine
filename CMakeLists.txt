@@ -66,6 +66,8 @@ add_executable(trading_engine main.cpp config.hpp
         util/sha1.hpp util/sha1.cpp
         perf/clock.hpp
         perf/latency_histogram.hpp perf/latency_histogram.cpp
+        perf/tick_to_trade_trace.hpp
+        perf/tick_to_trade_stats.hpp perf/tick_to_trade_stats.cpp
         log/async_logger.hpp log/async_logger.cpp)
 
 # Lets every file use root-relative includes (e.g. "okx/connectivity/auth.hpp" from

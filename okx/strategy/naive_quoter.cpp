@@ -38,7 +38,7 @@ NaiveQuoter::NaiveQuoter(OkxWsClient& ws_client, OrderStore& order_store,
       quote_bps_(quote_bps),
       requote_threshold_bps_(requote_threshold_bps) {}
 
-void NaiveQuoter::OnBookUpdate(const OrderBook& book, std::uint64_t wire_arrival_ticks) {
+void NaiveQuoter::OnBookUpdate(const OrderBook& book, TickToTradeTrace trace) {
     const auto best_bid = book.BestBid();
     const auto best_ask = book.BestAsk();
     if (!best_bid || !best_ask) {
@@ -47,14 +47,14 @@ void NaiveQuoter::OnBookUpdate(const OrderBook& book, std::uint64_t wire_arrival
 
     const double mid = (*best_bid + *best_ask) / 2.0;
     if (!last_quoted_mid_) {
-        Requote(mid, wire_arrival_ticks);
+        Requote(mid, trace);
         return;
     }
 
     const double deviation_bps =
         std::abs(mid - *last_quoted_mid_) / *last_quoted_mid_ * kBpsPerUnit;
     if (deviation_bps > requote_threshold_bps_) {
-        Requote(mid, wire_arrival_ticks);
+        Requote(mid, trace);
     }
 }
 
@@ -62,8 +62,8 @@ void NaiveQuoter::OnFill(const OrderEvent& event) {
     if (!OwnsOrder(event.cl_ord_id)) {
         return;
     }
-    Log.Info("Fill on {} side={} px={} sz={}", event.cl_ord_id, event.side, event.fill_px,
-             event.fill_sz);
+    Log.Info("Fill on {} side={} px={} sz={}", event.cl_ord_id, event.side, *event.fill_px,
+             *event.fill_sz);
 }
 
 void NaiveQuoter::OnCancel(const OrderEvent& event) {
@@ -97,11 +97,11 @@ void NaiveQuoter::OnTimer() {
     }
 }
 
-void NaiveQuoter::Requote(double mid, std::uint64_t wire_arrival_ticks) {
+void NaiveQuoter::Requote(double mid, TickToTradeTrace trace) {
     const auto [bid_px, ask_px] = ComputeQuotePrices(mid);
 
-    ReplaceSide(bid_cl_ord_id_, kBuy, bid_px, wire_arrival_ticks);
-    ReplaceSide(ask_cl_ord_id_, kSell, ask_px, wire_arrival_ticks);
+    ReplaceSide(bid_cl_ord_id_, kBuy, bid_px, trace);
+    ReplaceSide(ask_cl_ord_id_, kSell, ask_px, trace);
     last_quoted_mid_ = mid;
 }
 
@@ -110,9 +110,9 @@ std::pair<double, double> NaiveQuoter::ComputeQuotePrices(double mid) const {
 }
 
 void NaiveQuoter::ReplaceSide(std::optional<std::string>& cl_ord_id, std::string_view side,
-                              double px, std::uint64_t wire_arrival_ticks) {
+                              double px, std::optional<TickToTradeTrace> trace) {
     if (!cl_ord_id) {
-        cl_ord_id = PlaceSide(side, px, wire_arrival_ticks);
+        cl_ord_id = PlaceSide(side, px, trace);
         return;
     }
 
@@ -120,7 +120,7 @@ void NaiveQuoter::ReplaceSide(std::optional<std::string>& cl_ord_id, std::string
     if (!order || order->OrdId().empty()) {
         Log.Warn("Cannot amend {} (no ordId yet)", *cl_ord_id);
         cl_ord_id.reset();
-        cl_ord_id = PlaceSide(side, px, wire_arrival_ticks);
+        cl_ord_id = PlaceSide(side, px, trace);
         return;
     }
 
@@ -133,13 +133,14 @@ void NaiveQuoter::ReplaceSide(std::optional<std::string>& cl_ord_id, std::string
     order->OnAmendRequested();
     const WsOrderRequest amend =
         BuildWsAmendOrderMessage(inst_id_code_, order->OrdId(), formatted_px, sz_);
-    ws_client_.Send(amend.message);
-    RecordTickToTrade(wire_arrival_ticks);
+    TraceMessageBuilt(trace);
+
+    ws_client_.Send(amend.message, trace);
     Log.Debug("Sent amend for {} new px={}", *cl_ord_id, formatted_px);
 }
 
 std::optional<std::string> NaiveQuoter::PlaceSide(std::string_view side, double px,
-                                                  std::optional<std::uint64_t> wire_arrival_ticks) {
+                                                  std::optional<TickToTradeTrace> trace) {
     if (!rate_limiter_.TryAcquire(kOrderOp)) {
         Log.Warn("Place order rate-limited, skipping this cycle for {}", side);
         return std::nullopt;
@@ -155,19 +156,17 @@ std::optional<std::string> NaiveQuoter::PlaceSide(std::string_view side, double 
     };
     const WsOrderRequest order = BuildWsOrderMessage(request);
     order_store_.Add(order.id, inst_id_, std::string(side), request.px, sz_);
-    ws_client_.Send(order.message);
+    TraceMessageBuilt(trace);
 
-    RecordTickToTrade(wire_arrival_ticks);
+    ws_client_.Send(order.message, trace);
     Log.Info("Placed order {} id={} px={}", side, order.id, request.px);
     return order.id;
 }
 
-void NaiveQuoter::RecordTickToTrade(std::optional<std::uint64_t> wire_arrival_ticks) {
-    if (!wire_arrival_ticks) {
-        return;
+void NaiveQuoter::TraceMessageBuilt(std::optional<TickToTradeTrace>& trace) {
+    if (trace) {
+        trace->message_built_ticks = perf::ReadCounter();
     }
-    const std::uint64_t elapsed_ticks = perf::ReadCounter() - *wire_arrival_ticks;
-    tick_to_trade_histogram_.Record(perf::TicksToNanos(elapsed_ticks));
 }
 
 std::string NaiveQuoter::FormatPrice(double px) const {

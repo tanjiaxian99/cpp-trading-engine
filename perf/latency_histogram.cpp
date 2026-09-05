@@ -4,7 +4,10 @@
 #include <bit>
 #include <cmath>
 
-void LatencyHistogram::Record(std::uint64_t nanos) {
+#include "perf/clock.hpp"
+
+void LatencyHistogram::RecordTicks(std::uint64_t ticks) {
+    const std::uint64_t nanos = perf::TicksToNanos(ticks);
     total_count_++;
     max_ = std::max(max_, nanos);
     counts_[BucketIndex(nanos)]++;

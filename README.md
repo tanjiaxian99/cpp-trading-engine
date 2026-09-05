@@ -380,15 +380,23 @@ reconciliation, cancel-all — which is what the Design table already claims it 
 - [x] Tick-to-trade harness: wire arrival → order bytes handed to `write()` — **1 h**
 
 > Boundary: `perf::ReadCounter()` taken at the socket read completion that delivers a book
-> update (`OkxWsClient::ReadLoop`, before frame decode so decode cost is included), to
-> immediately after the `OkxWsClient::Send` call returns for the resulting order/amend
-> request in `NaiveQuoter` (after frame encode so encode cost is included too — stopping the
-> clock before `Send()` would have silently excluded WS framing/masking). Only book updates
-> that actually cause a place or amend are recorded — the timer-driven `EnsureQuoted` path
-> has no wire event to measure from and is excluded. `NaiveQuoter::TickToTradeHistogram()`
-> accumulates for the life of the process; percentiles are logged on shutdown
-> (`SIGINT`/`SIGTERM`). Filling in the README's benchmark table with real numbers from a live
-> run is B9's job, not this one's.
+> update (`OkxWsClient::ReadLoop`, before frame decode so decode cost is included), to the
+> point that update's resulting order/amend bytes are actually handed to
+> `Transport::AsyncWrite` inside `OkxWsClient::StartWrite` — not when `NaiveQuoter` calls
+> `Send()`, since a write already in flight (routine when quoting both sides back to back)
+> defers the real encode+syscall attempt until the current write completes and `StartWrite`
+> runs again. A `TickToTradeTrace` struct carries the timestamps through the pipeline; a
+> small FIFO of pending traces in `OkxWsClient` gets resolved the moment `StartWrite`
+> actually fires, whichever call triggered it. Only book updates that actually cause a place
+> or amend are recorded — the timer-driven `OnTimer`-only-requote path has no wire event to
+> measure from and is excluded. The pipeline is also broken into per-stage histograms (WS
+> decode, book update, strategy + order build, send) alongside the end-to-end total, so a
+> high number points at a cause instead of a black box; component percentiles don't sum to
+> the total's percentile (different order statistics), they're for locating where time goes,
+> not for reconstructing the aggregate. All histograms accumulate for the life of the
+> process; percentiles for all of them are logged on shutdown (`SIGINT`/`SIGTERM`). Filling
+> in the README's benchmark table with real numbers from a live run is B9's job, not this
+> one's.
 
 ### B9 · Documentation — 2–3 h
 

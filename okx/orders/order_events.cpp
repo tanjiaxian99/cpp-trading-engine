@@ -46,8 +46,8 @@ void ForEachOrderEvent(std::string_view message,
             .sz = json::FindString(order, kSz).value_or(kEmpty),
             .acc_fill_sz = json::FindString(order, kAccFillSz).value_or(kEmpty),
             .avg_px = json::FindString(order, kAvgPx).value_or(kEmpty),
-            .fill_px = json::FindString(order, kFillPx).value_or(kEmpty),
-            .fill_sz = json::FindString(order, kFillSz).value_or(kEmpty),
+            .fill_px = json::FindString(order, kFillPx),
+            .fill_sz = json::FindString(order, kFillSz),
         };
         action(event);
     });

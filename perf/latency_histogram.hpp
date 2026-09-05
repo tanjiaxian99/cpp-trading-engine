@@ -6,7 +6,7 @@
 
 class LatencyHistogram {
 public:
-    void Record(std::uint64_t nanos);
+    void RecordTicks(std::uint64_t ticks);
 
     [[nodiscard]] std::uint64_t Percentile(double p) const;
     [[nodiscard]] std::uint64_t Max() const {

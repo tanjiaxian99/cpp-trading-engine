@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string_view>
 
 enum class OrderEventType : std::uint8_t {
@@ -21,8 +22,8 @@ struct OrderEvent {
     std::string_view sz;
     std::string_view acc_fill_sz;
     std::string_view avg_px;
-    std::string_view fill_px;
-    std::string_view fill_sz;
+    std::optional<std::string_view> fill_px;
+    std::optional<std::string_view> fill_sz;
 };
 
 void ForEachOrderEvent(std::string_view message,

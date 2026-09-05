@@ -49,12 +49,16 @@ void OkxWsClient::SetOnMessage(MessageHandler handler) {
     on_message_ = std::move(handler);
 }
 
+void OkxWsClient::SetOnTraceResolved(TraceHandler handler) {
+    on_trace_resolved_ = std::move(handler);
+}
+
 void OkxWsClient::Start() {
     Connect();
 }
 
-void OkxWsClient::Send(std::string_view payload) {
-    WriteRaw(EncodeFrame(WebSocketOpcode::kText, payload));
+void OkxWsClient::Send(std::string_view payload, std::optional<TickToTradeTrace> trace) {
+    WriteRaw(EncodeFrame(WebSocketOpcode::kText, payload), trace);
 }
 
 void OkxWsClient::Connect() {
@@ -151,8 +155,11 @@ void OkxWsClient::HandleFrame(const WebSocketFrame& frame) {
     }
 }
 
-void OkxWsClient::WriteRaw(const std::string& frame) {
+void OkxWsClient::WriteRaw(const std::string& frame, std::optional<TickToTradeTrace> trace) {
     tx_ring_.Write(frame);
+    if (trace) {
+        pending_send_traces_.push_back(*trace);
+    }
     if (!write_in_flight_) {
         StartWrite();
     }
@@ -161,6 +168,16 @@ void OkxWsClient::WriteRaw(const std::string& frame) {
 void OkxWsClient::StartWrite() {
     if (!transport_) {
         return;
+    }
+
+    const std::uint64_t send_ticks = perf::ReadCounter();
+    while (!pending_send_traces_.empty()) {
+        TickToTradeTrace trace = pending_send_traces_.front();
+        pending_send_traces_.pop_front();
+        trace.send_ticks = send_ticks;
+        if (on_trace_resolved_) {
+            on_trace_resolved_(trace);
+        }
     }
 
     write_in_flight_ = true;
@@ -200,6 +217,7 @@ void OkxWsClient::SendLogin() {
 }
 
 void OkxWsClient::DispatchMessage(std::string_view message) {
+    last_message_decoded_ticks_ = perf::ReadCounter();
     if (auth_ && !authenticated_ && json::FindString(message, kEvent) == kLoginEvent) {
         authenticated_ = json::FindString(message, kCode) == kSuccessCode;
     }
