@@ -5,7 +5,11 @@
 void TickToTradeStats::Record(const TickToTradeTrace& trace) {
     ws_decode_histogram_.RecordTicks(trace.message_decoded_ticks - trace.wire_arrival_ticks);
     book_update_histogram_.RecordTicks(trace.book_consistent_ticks - trace.message_decoded_ticks);
-    strategy_build_histogram_.RecordTicks(trace.message_built_ticks - trace.book_consistent_ticks);
+    rate_limit_check_histogram_.RecordTicks(trace.rate_limit_checked_ticks -
+                                            trace.book_consistent_ticks);
+    price_format_histogram_.RecordTicks(trace.price_formatted_ticks -
+                                        trace.rate_limit_checked_ticks);
+    message_build_histogram_.RecordTicks(trace.message_built_ticks - trace.price_formatted_ticks);
     send_histogram_.RecordTicks(trace.send_ticks - trace.message_built_ticks);
     tick_to_trade_histogram_.RecordTicks(trace.send_ticks - trace.wire_arrival_ticks);
 }
@@ -17,7 +21,9 @@ void TickToTradeStats::LogSummary() const {
     };
     log_stage("WS decode", ws_decode_histogram_);
     log_stage("Book update", book_update_histogram_);
-    log_stage("Strategy + order build", strategy_build_histogram_);
+    log_stage("Rate limit check", rate_limit_check_histogram_);
+    log_stage("Price format", price_format_histogram_);
+    log_stage("Message build", message_build_histogram_);
     log_stage("Send (encode+write)", send_histogram_);
     log_stage("Tick-to-trade (total)", tick_to_trade_histogram_);
 }

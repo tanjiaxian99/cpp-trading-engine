@@ -124,12 +124,19 @@ void NaiveQuoter::ReplaceSide(std::optional<std::string>& cl_ord_id, std::string
         return;
     }
 
+    if (order->State() == OrderState::kPendingAmend) {
+        Log.Debug("Amend already in flight for {}, skipping this cycle", *cl_ord_id);
+        return;
+    }
+
     if (!rate_limiter_.TryAcquire(kAmendOrderOp)) {
         Log.Warn("Amend order rate-limited, skipping this cycle for {}", *cl_ord_id);
         return;
     }
+    TraceRateLimitChecked(trace);
 
     const std::string formatted_px = FormatPrice(px);
+    TracePriceFormatted(trace);
     order->OnAmendRequested();
     const WsOrderRequest amend =
         BuildWsAmendOrderMessage(inst_id_code_, order->OrdId(), formatted_px, sz_);
@@ -145,12 +152,16 @@ std::optional<std::string> NaiveQuoter::PlaceSide(std::string_view side, double 
         Log.Warn("Place order rate-limited, skipping this cycle for {}", side);
         return std::nullopt;
     }
+    TraceRateLimitChecked(trace);
+
+    const std::string formatted_px = FormatPrice(px);
+    TracePriceFormatted(trace);
 
     const OrderRequest request{
         .inst_id = inst_id_,
         .side = std::string(side),
         .ord_type = std::string(kLimit),
-        .px = FormatPrice(px),
+        .px = formatted_px,
         .sz = sz_,
         .inst_id_code = inst_id_code_,
     };
@@ -161,6 +172,18 @@ std::optional<std::string> NaiveQuoter::PlaceSide(std::string_view side, double 
     ws_client_.Send(order.message, trace);
     Log.Info("Placed order {} id={} px={}", side, order.id, request.px);
     return order.id;
+}
+
+void NaiveQuoter::TraceRateLimitChecked(std::optional<TickToTradeTrace>& trace) {
+    if (trace) {
+        trace->rate_limit_checked_ticks = perf::ReadCounter();
+    }
+}
+
+void NaiveQuoter::TracePriceFormatted(std::optional<TickToTradeTrace>& trace) {
+    if (trace) {
+        trace->price_formatted_ticks = perf::ReadCounter();
+    }
 }
 
 void NaiveQuoter::TraceMessageBuilt(std::optional<TickToTradeTrace>& trace) {

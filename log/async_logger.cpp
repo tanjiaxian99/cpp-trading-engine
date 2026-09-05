@@ -18,10 +18,6 @@ AsyncLogger::~AsyncLogger() {
 }
 
 void AsyncLogger::Emit(LogLevel level, std::string_view message, std::source_location loc) {
-    if (level < min_level) {
-        return;
-    }
-
     const std::size_t tail = tail_.load(std::memory_order_relaxed);
     const std::size_t next_tail = (tail + 1) % kRingCapacity;
 

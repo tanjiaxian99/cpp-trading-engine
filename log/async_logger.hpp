@@ -39,6 +39,9 @@ public:
     AsyncLogger& operator=(AsyncLogger&&) = delete;
 
     void Emit(LogLevel level, std::string_view message, std::source_location loc);
+    [[nodiscard]] LogLevel MinLevel() const {
+        return min_level;
+    }
 
 private:
     static constexpr std::size_t kRingCapacity = 4096;
@@ -75,23 +78,35 @@ struct LogProxy {
     // std::type_identity_t to tell the compiler to skip this parameter for type deduction
     template <typename... Args>
     void Debug(LogFmt<std::type_identity_t<Args>...> fmt, Args&&... args) const {
-        LoggerInstance().Emit(LogLevel::kDebug, std::format(fmt.fmt, std::forward<Args>(args)...),
-                              fmt.loc);
+        AsyncLogger& logger = LoggerInstance();
+        if (LogLevel::kDebug < logger.MinLevel()) {
+            return;
+        }
+        logger.Emit(LogLevel::kDebug, std::format(fmt.fmt, std::forward<Args>(args)...), fmt.loc);
     }
     template <typename... Args>
     void Info(LogFmt<std::type_identity_t<Args>...> fmt, Args&&... args) const {
-        LoggerInstance().Emit(LogLevel::kInfo, std::format(fmt.fmt, std::forward<Args>(args)...),
-                              fmt.loc);
+        AsyncLogger& logger = LoggerInstance();
+        if (LogLevel::kInfo < logger.MinLevel()) {
+            return;
+        }
+        logger.Emit(LogLevel::kInfo, std::format(fmt.fmt, std::forward<Args>(args)...), fmt.loc);
     }
     template <typename... Args>
     void Warn(LogFmt<std::type_identity_t<Args>...> fmt, Args&&... args) const {
-        LoggerInstance().Emit(LogLevel::kWarn, std::format(fmt.fmt, std::forward<Args>(args)...),
-                              fmt.loc);
+        AsyncLogger& logger = LoggerInstance();
+        if (LogLevel::kWarn < logger.MinLevel()) {
+            return;
+        }
+        logger.Emit(LogLevel::kWarn, std::format(fmt.fmt, std::forward<Args>(args)...), fmt.loc);
     }
     template <typename... Args>
     void Error(LogFmt<std::type_identity_t<Args>...> fmt, Args&&... args) const {
-        LoggerInstance().Emit(LogLevel::kError, std::format(fmt.fmt, std::forward<Args>(args)...),
-                              fmt.loc);
+        AsyncLogger& logger = LoggerInstance();
+        if (LogLevel::kError < logger.MinLevel()) {
+            return;
+        }
+        logger.Emit(LogLevel::kError, std::format(fmt.fmt, std::forward<Args>(args)...), fmt.loc);
     }
 };
 

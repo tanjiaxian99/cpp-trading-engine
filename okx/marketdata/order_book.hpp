@@ -28,7 +28,7 @@ public:
     }
 
 private:
-    static constexpr std::size_t kCapacity = 1024;
+    static constexpr std::size_t kCapacity = 32;
 
     struct Level {
         double price = 0.0;
@@ -81,6 +81,10 @@ private:
         }
 
         void InsertAt(std::size_t i, Level level) {
+            if (i >= kCapacity) {
+                return;
+            }
+
             const std::size_t last = (count_ == kCapacity) ? count_ - 1 : count_;
             for (std::size_t j = last; j > i; j--) {
                 levels_[j] = levels_[j - 1];
