@@ -84,6 +84,7 @@ struct LogProxy {
         }
         logger.Emit(LogLevel::kDebug, std::format(fmt.fmt, std::forward<Args>(args)...), fmt.loc);
     }
+
     template <typename... Args>
     void Info(LogFmt<std::type_identity_t<Args>...> fmt, Args&&... args) const {
         AsyncLogger& logger = LoggerInstance();
@@ -92,6 +93,7 @@ struct LogProxy {
         }
         logger.Emit(LogLevel::kInfo, std::format(fmt.fmt, std::forward<Args>(args)...), fmt.loc);
     }
+
     template <typename... Args>
     void Warn(LogFmt<std::type_identity_t<Args>...> fmt, Args&&... args) const {
         AsyncLogger& logger = LoggerInstance();
@@ -100,6 +102,7 @@ struct LogProxy {
         }
         logger.Emit(LogLevel::kWarn, std::format(fmt.fmt, std::forward<Args>(args)...), fmt.loc);
     }
+
     template <typename... Args>
     void Error(LogFmt<std::type_identity_t<Args>...> fmt, Args&&... args) const {
         AsyncLogger& logger = LoggerInstance();

@@ -1,7 +1,8 @@
 #include "okx/strategy/naive_quoter.hpp"
 
+#include <array>
+#include <charconv>
 #include <cmath>
-#include <format>
 #include <utility>
 
 #include "log/async_logger.hpp"
@@ -123,6 +124,7 @@ void NaiveQuoter::ReplaceSide(std::optional<std::string>& cl_ord_id, std::string
         cl_ord_id = PlaceSide(side, px, trace);
         return;
     }
+    TraceOrderLocated(trace);
 
     if (order->State() == OrderState::kPendingAmend) {
         Log.Debug("Amend already in flight for {}, skipping this cycle", *cl_ord_id);
@@ -148,6 +150,7 @@ void NaiveQuoter::ReplaceSide(std::optional<std::string>& cl_ord_id, std::string
 
 std::optional<std::string> NaiveQuoter::PlaceSide(std::string_view side, double px,
                                                   std::optional<TickToTradeTrace> trace) {
+    TraceOrderLocated(trace);
     if (!rate_limiter_.TryAcquire(kOrderOp)) {
         Log.Warn("Place order rate-limited, skipping this cycle for {}", side);
         return std::nullopt;
@@ -174,6 +177,12 @@ std::optional<std::string> NaiveQuoter::PlaceSide(std::string_view side, double 
     return order.id;
 }
 
+void NaiveQuoter::TraceOrderLocated(std::optional<TickToTradeTrace>& trace) {
+    if (trace) {
+        trace->order_located_ticks = perf::ReadCounter();
+    }
+}
+
 void NaiveQuoter::TraceRateLimitChecked(std::optional<TickToTradeTrace>& trace) {
     if (trace) {
         trace->rate_limit_checked_ticks = perf::ReadCounter();
@@ -194,7 +203,10 @@ void NaiveQuoter::TraceMessageBuilt(std::optional<TickToTradeTrace>& trace) {
 
 std::string NaiveQuoter::FormatPrice(double px) const {
     const double rounded = std::round(px / tick_sz_) * tick_sz_;
-    return std::format("{:.{}f}", rounded, tick_decimal_places_);
+    std::array<char, 32> buf{};
+    const auto result = std::to_chars(buf.data(), buf.data() + buf.size(), rounded,
+                                      std::chars_format::fixed, tick_decimal_places_);
+    return {buf.data(), result.ptr};
 }
 
 bool NaiveQuoter::OwnsOrder(std::string_view cl_ord_id) const {

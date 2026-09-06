@@ -11,6 +11,7 @@ public:
 private:
     LatencyHistogram ws_decode_histogram_;
     LatencyHistogram book_update_histogram_;
+    LatencyHistogram order_lookup_histogram_;
     LatencyHistogram rate_limit_check_histogram_;
     LatencyHistogram price_format_histogram_;
     LatencyHistogram message_build_histogram_;

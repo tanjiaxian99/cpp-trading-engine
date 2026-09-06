@@ -29,6 +29,7 @@ private:
                      std::optional<TickToTradeTrace> trace);
     std::optional<std::string> PlaceSide(std::string_view side, double px,
                                          std::optional<TickToTradeTrace> trace);
+    void TraceOrderLocated(std::optional<TickToTradeTrace>& trace);
     void TraceRateLimitChecked(std::optional<TickToTradeTrace>& trace);
     void TracePriceFormatted(std::optional<TickToTradeTrace>& trace);
     void TraceMessageBuilt(std::optional<TickToTradeTrace>& trace);
