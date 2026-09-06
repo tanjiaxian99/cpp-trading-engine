@@ -177,7 +177,10 @@ void ForEachArrayElement(std::string_view json, std::string_view key,
         return;
     }
 
-    const std::string_view array = json.substr(value_start);
+    ForEachElement(json.substr(value_start), action);
+}
+
+void ForEachElement(std::string_view array, const std::function<void(std::string_view)>& action) {
     std::size_t pos = 1;  // Past the opening '['.
     while (true) {
         pos = SkipWhitespace(array, pos);
@@ -191,6 +194,43 @@ void ForEachArrayElement(std::string_view json, std::string_view key,
 
         pos = SkipWhitespace(array, pos);
         if (pos < array.size() && array[pos] == ',') {
+            pos++;
+        }
+    }
+}
+
+void ForEachField(std::string_view json,
+                  const std::function<void(std::string_view, std::string_view)>& action) {
+    if (json.empty() || json.front() != '{') {
+        return;
+    }
+
+    std::size_t pos = 1;  // Past the opening '{'.
+    while (true) {
+        pos = SkipWhitespace(json, pos);
+        if (pos >= json.size() || json[pos] != '"') {
+            return;
+        }
+
+        const std::size_t key_start = pos + 1;
+        const std::size_t key_end = json.find('"', key_start);
+        if (key_end == std::string_view::npos) {
+            return;
+        }
+
+        const std::string_view key = json.substr(key_start, key_end - key_start);
+        pos = SkipWhitespace(json, key_end + 1);
+        if (pos >= json.size() || json[pos] != ':') {
+            return;
+        }
+
+        pos = SkipWhitespace(json, pos + 1);
+        const std::size_t value_start = pos;
+        pos = SkipValue(json, pos);
+        action(key, json.substr(value_start, pos - value_start));
+
+        pos = SkipWhitespace(json, pos);
+        if (pos < json.size() && json[pos] == ',') {
             pos++;
         }
     }

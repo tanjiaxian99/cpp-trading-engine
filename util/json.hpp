@@ -24,6 +24,13 @@ std::optional<std::string_view> FindElement(std::string_view json_array, std::si
 void ForEachArrayElement(std::string_view json, std::string_view key,
                          const std::function<void(std::string_view)>& action);
 
+// Loop through every element of an array without a key lookup
+void ForEachElement(std::string_view array, const std::function<void(std::string_view)>& action);
+
+// Loop through every key/value pair of a flat JSON object (starts at '{') in a single pass
+void ForEachField(std::string_view json,
+                  const std::function<void(std::string_view key, std::string_view value)>& action);
+
 // Parses a JSON decimal number, e.g. "123.45" -> 123.45
 double ParseDouble(std::string_view text);
 

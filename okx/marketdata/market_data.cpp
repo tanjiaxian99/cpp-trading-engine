@@ -1,6 +1,7 @@
 #include "okx/marketdata/market_data.hpp"
 
 #include <format>
+#include <optional>
 #include <stdexcept>
 
 #include "okx/common/okx_constants.hpp"
@@ -17,8 +18,8 @@ std::string_view StripQuotes(std::string_view text) {
     return text;
 }
 
-void ApplyLevels(std::string_view data, std::string_view key, OrderBook& book) {
-    json::ForEachArrayElement(data, key, [&](std::string_view level) {
+void ApplyLevels(std::string_view array, std::string_view key, OrderBook& book) {
+    json::ForEachElement(array, [&](std::string_view level) {
         const auto price_text = json::FindElement(level, kBooksLevelPriceIdx);
         const auto size_text = json::FindElement(level, kBooksLevelSizeIdx);
         if (!price_text || !size_text) {
@@ -48,8 +49,21 @@ BookMessageResult ApplyBookMessage(std::string_view message, OrderBook& book) {
     }
 
     const std::string_view data = *maybe_data;
-    const auto seq_id_text = json::FindNumber(data, kSeqId);
-    const auto prev_seq_id_text = json::FindNumber(data, kPrevSeqId);
+    std::optional<std::string_view> seq_id_text;
+    std::optional<std::string_view> prev_seq_id_text;
+    std::optional<std::string_view> bids;
+    std::optional<std::string_view> asks;
+    json::ForEachField(data, [&](std::string_view key, std::string_view value) {
+        if (key == kSeqId) {
+            seq_id_text = value;
+        } else if (key == kPrevSeqId) {
+            prev_seq_id_text = value;
+        } else if (key == kBids) {
+            bids = value;
+        } else if (key == kAsks) {
+            asks = value;
+        }
+    });
     if (!seq_id_text || !prev_seq_id_text) {
         throw std::runtime_error(std::format("Malformed books channel message: {}", data));
     }
@@ -67,8 +81,12 @@ BookMessageResult ApplyBookMessage(std::string_view message, OrderBook& book) {
     if (is_snapshot) {
         book.BeginSnapshot();
     }
-    ApplyLevels(data, kBids, book);
-    ApplyLevels(data, kAsks, book);
+    if (bids) {
+        ApplyLevels(*bids, kBids, book);
+    }
+    if (asks) {
+        ApplyLevels(*asks, kAsks, book);
+    }
     book.SetSeqId(json::ParseLL(*seq_id_text));
 
     return BookMessageResult::kApplied;
