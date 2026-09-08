@@ -1,13 +1,19 @@
 #include <boost/asio.hpp>
 
+#include <cerrno>
 #include <chrono>
 #include <csignal>
+#include <cstring>
 #include <exception>
 #include <format>
 #include <functional>
 #include <optional>
 #include <stdexcept>
 #include <string>
+
+#ifdef __APPLE__
+#include <pthread/qos.h>
+#endif
 
 #include "config.hpp"
 #include "log/async_logger.hpp"
@@ -259,6 +265,12 @@ private:
 }  // namespace
 
 int main() {
+#ifdef __APPLE__
+    if (pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0) != 0) {
+        Log.Warn("Failed to set thread QoS class: {}", std::strerror(errno));
+    }
+#endif
+
     TickToTradeStats tick_to_trade_stats;
     try {
         const Config config = Config::FromEnv();
@@ -504,7 +516,9 @@ int main() {
 
         ws_client.Start();
         private_ws_client.Start();
-        io_context.run();
+        while (!io_context.stopped()) {
+            io_context.poll();
+        }
         return 0;
     } catch (const std::exception& e) {
         Log.Error("Fatal exception causing main to crash: {}", e.what());
