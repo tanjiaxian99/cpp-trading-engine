@@ -31,6 +31,8 @@ public:
     void SetOnTraceResolved(TraceHandler handler);
     void Start();
     void Send(std::string_view payload, std::optional<TickToTradeTrace> trace = std::nullopt);
+    void BeginBatch();
+    void EndBatch();
     [[nodiscard]] bool IsConnected() const {
         return transport_.has_value();
     }
@@ -77,6 +79,7 @@ private:
     std::uint64_t last_message_decoded_ticks_ = 0;
     RingBuffer<kTxRingCapacity> tx_ring_;
     bool write_in_flight_ = false;
+    bool batching_ = false;
     WebSocketReassembler<kMaxMessageSize> reassembler_;
     std::deque<TickToTradeTrace> pending_send_traces_;
 

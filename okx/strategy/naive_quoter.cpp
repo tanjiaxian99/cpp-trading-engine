@@ -90,19 +90,23 @@ void NaiveQuoter::OnTimer() {
     }
 
     const auto [bid_px, ask_px] = ComputeQuotePrices(*last_quoted_mid_);
+    ws_client_.BeginBatch();
     if (!bid_cl_ord_id_) {
         bid_cl_ord_id_ = PlaceSide(kBuy, bid_px, std::nullopt);
     }
     if (!ask_cl_ord_id_) {
         ask_cl_ord_id_ = PlaceSide(kSell, ask_px, std::nullopt);
     }
+    ws_client_.EndBatch();
 }
 
 void NaiveQuoter::Requote(double mid, TickToTradeTrace trace) {
     const auto [bid_px, ask_px] = ComputeQuotePrices(mid);
 
+    ws_client_.BeginBatch();
     ReplaceSide(bid_cl_ord_id_, kBuy, bid_px, trace);
     ReplaceSide(ask_cl_ord_id_, kSell, ask_px, trace);
+    ws_client_.EndBatch();
     last_quoted_mid_ = mid;
 }
 

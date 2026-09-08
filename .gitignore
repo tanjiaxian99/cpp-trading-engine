@@ -1,5 +1,7 @@
 # Private working notes
 NOTES.private.md
+notes_latency_chart.py
+notes_latency_trend.svg
 
 # Credentials — never commit
 .env

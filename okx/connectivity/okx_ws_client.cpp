@@ -160,6 +160,18 @@ void OkxWsClient::WriteRaw(const std::string& frame, std::optional<TickToTradeTr
     if (trace) {
         pending_send_traces_.push_back(*trace);
     }
+
+    if (!write_in_flight_ && !batching_) {
+        StartWrite();
+    }
+}
+
+void OkxWsClient::BeginBatch() {
+    batching_ = true;
+}
+
+void OkxWsClient::EndBatch() {
+    batching_ = false;
     if (!write_in_flight_) {
         StartWrite();
     }
