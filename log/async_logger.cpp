@@ -71,8 +71,8 @@ void AsyncLogger::WriterLoop() {
         }
 
         const Record& record = ring_[head];
-        const auto timestamp_ms =
-            std::chrono::time_point_cast<std::chrono::milliseconds>(record.timestamp);
+        const auto timestamp_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(
+            record.timestamp + std::chrono::hours(8));
         std::cout << std::format("{:%Y-%m-%d %H:%M:%S}", timestamp_ms) << ' '
                   << LevelName(record.level) << ' ' << record.function_name << ' ';
         std::cout.write(record.data.data(), record.len);

@@ -7,6 +7,7 @@
 #include <exception>
 #include <format>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -24,8 +25,10 @@
 #include "okx/connectivity/okx_ws_client.hpp"
 #include "okx/connectivity/rate_limiter.hpp"
 #include "okx/connectivity/ws_response_demux.hpp"
-#include "okx/marketdata/market_data.hpp"
+#include "okx/marketdata/json_book_source.hpp"
+#include "okx/marketdata/market_data_source.hpp"
 #include "okx/marketdata/order_book.hpp"
+#include "okx/marketdata/sbe_bbo_source.hpp"
 #include "okx/orders/order_events.hpp"
 #include "okx/orders/order_lifecycle.hpp"
 #include "okx/orders/order_store.hpp"
@@ -61,13 +64,8 @@ constexpr std::string_view kSmokeTestPx = "100";
 constexpr std::string_view kSmokeTestAmendPx = "101";
 constexpr std::string_view kSmokeTestSz = "0.01";
 
-constexpr std::string_view kBooksSubscribeFormat =
-    R"({{"op":"subscribe","args":[{{"channel":"books","instId":"{0}"}},)"
-    R"({{"channel":"trades","instId":"{0}"}}]}})";
-constexpr std::string_view kBooksUnsubscribeFormat =
-    R"({{"op":"unsubscribe","args":[{{"channel":"books","instId":"{}"}}]}})";
-constexpr std::string_view kBooksResubscribeFormat =
-    R"({{"op":"subscribe","args":[{{"channel":"books","instId":"{}"}}]}})";
+constexpr std::string_view kSbeWsPath = "/ws/v5/public-sbe";
+
 constexpr std::string_view kPrivateSubscribeMsg =
     R"({"op":"subscribe","args":)"
     R"([{"channel":"orders","instType":"SPOT"},{"channel":"account"},)"
@@ -90,9 +88,21 @@ constexpr RateLimit kAmendRateLimit{.capacity = 60, .window = std::chrono::secon
 constexpr auto kQuoterTimerInterval = std::chrono::milliseconds(500);
 constexpr auto kStatsLogInterval = std::chrono::minutes(5);
 
-void LogBookUpdate(const OrderBook& book) {
-    Log.Debug("Update to orderbook: bid={} ask={} seqId={}", book.BestBid().value_or(0.0),
-              book.BestAsk().value_or(0.0), book.LastSeqId());
+std::unique_ptr<MarketDataSource> MakeMarketDataSource(MarketDataMode mode,
+                                                       asio::io_context& io_context,
+                                                       const OkxAuth& auth,
+                                                       long long inst_id_code) {
+    switch (mode) {
+        case MarketDataMode::kJsonBook:
+            return std::make_unique<JsonBookSource>(
+                io_context, std::string(kOkxWsHost), std::string(kOkxWsPort),
+                std::string(kPublicWsPath), std::string(kEthUsdt));
+        case MarketDataMode::kSbeBbo:
+            return std::make_unique<SbeBboSource>(io_context, std::string(kOkxWsHost),
+                                                  std::string(kOkxWsPort), std::string(kSbeWsPath),
+                                                  inst_id_code, auth);
+    }
+    throw std::runtime_error(std::format("Unrecognized MarketDataMode"));
 }
 
 void LogOrderEvent(const OrderEvent& event) {
@@ -330,12 +340,13 @@ int main() {
         }
 
         asio::io_context io_context;
-        OkxWsClient ws_client(io_context, std::string(kOkxWsHost), std::string(kOkxWsPort),
-                              std::string(kPublicWsPath));
         OkxWsClient private_ws_client(io_context, std::string(kOkxWsHost), std::string(kOkxWsPort),
                                       std::string(kPrivateWsPath), auth);
 
-        OrderBook order_book;
+        const std::unique_ptr<MarketDataSource> market_data =
+            MakeMarketDataSource(config.market_data_mode, io_context, auth, eth_usdt_inst_id_code);
+        Log.Info("Market data mode: {}", market_data->Name());
+
         OrderStore order_store;
         KillSwitch kill_switch(rest_client, auth, order_store);
         EndpointRateLimiter rate_limiter(kOrderRateLimit, kCancelRateLimit, kAmendRateLimit);
@@ -349,43 +360,10 @@ int main() {
             tick_to_trade_stats.Record(trace);
         });
 
-        const std::string subscribe_msg = std::format(kBooksSubscribeFormat, kEthUsdt);
-        const std::string books_unsubscribe_msg = std::format(kBooksUnsubscribeFormat, kEthUsdt);
-        const std::string books_subscribe_msg = std::format(kBooksResubscribeFormat, kEthUsdt);
-
-        ws_client.SetOnConnected([&ws_client, &subscribe_msg]() {
-            ws_client.Send(subscribe_msg);
-            Log.Info("Sent books and trades WS subscribe request");
-        });
-        ws_client.SetOnMessage([&order_book, &ws_client, &books_unsubscribe_msg,
-                                &books_subscribe_msg, &quoter, &kill_switch,
-                                &private_ws_client](std::string_view message) {
-            const std::uint64_t wire_arrival_ticks = ws_client.LastMessageArrivalTicks();
-            const std::uint64_t message_decoded_ticks = ws_client.LastMessageDecodedTicks();
-
-            switch (ApplyBookMessage(message, order_book)) {
-                case BookMessageResult::kApplied: {
-                    const std::uint64_t book_consistent_ticks = perf::ReadCounter();
-                    LogBookUpdate(order_book);
-                    if (!kill_switch.IsTriggered() && private_ws_client.IsAuthenticated()) {
-                        quoter.OnBookUpdate(order_book,
-                                            TickToTradeTrace{
-                                                .wire_arrival_ticks = wire_arrival_ticks,
-                                                .message_decoded_ticks = message_decoded_ticks,
-                                                .book_consistent_ticks = book_consistent_ticks,
-                                            });
-                    }
-                    break;
-                }
-                case BookMessageResult::kGapDetected:
-                    Log.Warn(
-                        "Order book sequence gap detected — resubscribing for a fresh snapshot");
-                    ws_client.Send(books_unsubscribe_msg);
-                    ws_client.Send(books_subscribe_msg);
-                    break;
-                case BookMessageResult::kIgnored:
-                    Log.Debug("WS message is ignored: {}", message);
-                    break;
+        market_data->SetOnBookUpdate([&quoter, &kill_switch, &private_ws_client](
+                                         const OrderBook& book, TickToTradeTrace trace) {
+            if (!kill_switch.IsTriggered() && private_ws_client.IsAuthenticated()) {
+                quoter.OnBookUpdate(book, trace);
             }
         });
 
@@ -514,7 +492,7 @@ int main() {
             }
         });
 
-        ws_client.Start();
+        market_data->Start();
         private_ws_client.Start();
         while (!io_context.stopped()) {
             io_context.poll();

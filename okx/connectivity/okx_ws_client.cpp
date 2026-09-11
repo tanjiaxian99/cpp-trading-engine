@@ -32,12 +32,13 @@ std::chrono::milliseconds ComputeBackoff(int attempt) {
 }  // namespace
 
 OkxWsClient::OkxWsClient(asio::io_context& io_context, std::string host, std::string port,
-                         std::string path, std::optional<OkxAuth> auth)
+                         std::string path, std::optional<OkxAuth> auth, WsEndpointKind kind)
     : io_context_(io_context),
       host_(std::move(host)),
       port_(std::move(port)),
       path_(std::move(path)),
       auth_(std::move(auth)),
+      kind_(kind),
       reconnect_timer_(io_context_),
       heartbeat_timer_(io_context_) {}
 
@@ -65,16 +66,23 @@ void OkxWsClient::Connect() {
     try {
         transport_.emplace(io_context_, host_, port_);
         transport_->Connect();
-        PerformWebSocketHandshake(*transport_, host_, path_);
+        const std::vector<std::string> handshake_headers = kind_ == WsEndpointKind::kSbe && auth_
+                                                               ? auth_->SbeWsLoginHeaders()
+                                                               : std::vector<std::string>{};
+        PerformWebSocketHandshake(*transport_, host_, path_, handshake_headers);
 
         reconnect_attempt_ = 0;
         rx_buffer_.clear();
         authenticated_ = false;
 
         Log.Info("OKX WebSocket connected to {}{}", host_, path_);
-        if (auth_) {
+        if (kind_ == WsEndpointKind::kSbe) {
+            // For SBE, authentication is done in the header of the upgrade message
+            authenticated_ = true;
+        } else if (auth_) {
             SendLogin();
         }
+
         if (on_connected_) {
             on_connected_();
         }
@@ -210,6 +218,11 @@ void OkxWsClient::StartWrite() {
 }
 
 void OkxWsClient::ScheduleHeartbeat() {
+    if (kind_ == WsEndpointKind::kSbe) {
+        // For SBE, the server drives liveness checks,
+        // which BuildControlResponse then responds with pong
+        return;
+    }
     heartbeat_timer_.expires_after(kHeartbeatInterval);
     heartbeat_timer_.async_wait([this](const boost::system::error_code& ec) {
         if (ec) {
@@ -224,7 +237,7 @@ void OkxWsClient::SendLogin() {
     if (!auth_) {
         throw std::runtime_error("OkxWsClient::SendLogin called without auth");
     }
-    Send(auth_->BuildWsLoginMessage());
+    Send(auth_->BuildPrivateWsLoginMessage());
     Log.Debug("Sent WS login request");
 }
 

@@ -103,11 +103,26 @@ std::vector<std::string> OkxAuth::SignHeaders(HttpMethod method, std::string_vie
     };
 }
 
-std::string OkxAuth::BuildWsLoginMessage() const {
-    const std::string timestamp = UnixTimestampSecondsNow();
-
-    const std::string prehash = timestamp + std::string(kWsLoginMethod) + std::string(kWsLoginPath);
-    const std::string signature = HmacSha256Base64(prehash, api_secret_);
-
+std::string OkxAuth::BuildPrivateWsLoginMessage() const {
+    const auto [timestamp, signature] = SignWsLogin();
     return std::format(kWsLoginBodyFormat, api_key_, passphrase_, timestamp, signature);
+}
+
+std::vector<std::string> OkxAuth::SbeWsLoginHeaders() const {
+    const auto [timestamp, signature] = SignWsLogin();
+    return {
+        "OK-ACCESS-KEY: " + api_key_,
+        "OK-ACCESS-SIGN: " + signature,
+        "OK-ACCESS-TIMESTAMP: " + timestamp,
+        "OK-ACCESS-PASSPHRASE: " + passphrase_,
+    };
+}
+
+OkxAuth::WsLoginSignature OkxAuth::SignWsLogin() const {
+    std::string timestamp = UnixTimestampSecondsNow();
+    const std::string prehash = timestamp + std::string(kWsLoginMethod) + std::string(kWsLoginPath);
+    return {
+        .timestamp = std::move(timestamp),
+        .signature = HmacSha256Base64(prehash, api_secret_),
+    };
 }

@@ -26,8 +26,7 @@ constexpr std::string_view kRequestFormat =
     "Upgrade: websocket\r\n"
     "Connection: Upgrade\r\n"
     "Sec-WebSocket-Key: {}\r\n"
-    "Sec-WebSocket-Version: 13\r\n"
-    "\r\n";
+    "Sec-WebSocket-Version: 13\r\n";
 
 constexpr std::string_view kExpectedStatusLine = "HTTP/1.1 101";
 constexpr std::string_view kAcceptHeaderName = "sec-websocket-accept";
@@ -92,13 +91,22 @@ std::optional<std::string_view> FindHeader(std::string_view response, std::strin
 }
 }  // namespace
 
-void PerformWebSocketHandshake(Transport& transport, std::string_view host, std::string_view path) {
+void PerformWebSocketHandshake(Transport& transport, std::string_view host, std::string_view path,
+                               const std::vector<std::string>& extra_headers) {
     const std::string key = GenerateWebSocketKey();
-    transport.Write(std::format(kRequestFormat, path, host, key));
+    std::string request = std::format(kRequestFormat, path, host, key);
+    for (const std::string& header : extra_headers) {
+        request += header;
+        request += kCrLf;
+    }
+    request += kCrLf;
+    transport.Write(request);
 
     const std::string response = ReadHandshakeResponse(transport);
     if (!response.starts_with(kExpectedStatusLine)) {
-        throw std::runtime_error("WebSocket handshake failed: server did not switch protocols");
+        const std::size_t line_end = response.find(kCrLf);
+        throw std::runtime_error(
+            std::format("WebSocket handshake failed with error: {}", response.substr(0, line_end)));
     }
 
     const auto accept_header = FindHeader(response, kAcceptHeaderName);

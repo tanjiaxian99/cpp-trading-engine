@@ -22,10 +22,17 @@ public:
     [[nodiscard]] std::vector<std::string> SignHeaders(HttpMethod method,
                                                        std::string_view request_path,
                                                        std::string_view body = "") const;
-
-    [[nodiscard]] std::string BuildWsLoginMessage() const;
+    [[nodiscard]] std::string BuildPrivateWsLoginMessage() const;
+    [[nodiscard]] std::vector<std::string> SbeWsLoginHeaders() const;
 
 private:
+    struct WsLoginSignature {
+        std::string timestamp;
+        std::string signature;
+    };
+
+    [[nodiscard]] WsLoginSignature SignWsLogin() const;
+
     std::string api_key_;
     std::string api_secret_;
     std::string passphrase_;

@@ -17,6 +17,11 @@
 
 namespace asio = boost::asio;
 
+enum class WsEndpointKind : std::uint8_t {
+    kJson,  // Credentials is sent after the handshake, and liveness is done by the client
+    kSbe,   // Credentials is added to the upgrade request, and liveness is done by the server
+};
+
 class OkxWsClient {
 public:
     using MessageHandler = std::function<void(std::string_view message)>;
@@ -24,7 +29,8 @@ public:
     using TraceHandler = std::function<void(const TickToTradeTrace&)>;
 
     OkxWsClient(asio::io_context& io_context, std::string host, std::string port, std::string path,
-                std::optional<OkxAuth> auth = std::nullopt);
+                std::optional<OkxAuth> auth = std::nullopt,
+                WsEndpointKind kind = WsEndpointKind::kJson);
 
     void SetOnConnected(ConnectHandler handler);
     void SetOnMessage(MessageHandler handler);
@@ -66,6 +72,7 @@ private:
     std::string port_;
     std::string path_;
     std::optional<OkxAuth> auth_;
+    WsEndpointKind kind_;
     bool authenticated_ = false;
 
     std::optional<Transport> transport_;
