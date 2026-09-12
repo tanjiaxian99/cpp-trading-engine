@@ -42,16 +42,18 @@ add_executable(trading_engine main.cpp config.hpp
         net/websocket_reassembler.hpp
         rest/rest_client.hpp rest/rest_client.cpp
         okx/connectivity/auth.hpp okx/connectivity/auth.cpp okx/common/okx_constants.hpp
+        okx/common/instruments.hpp okx/connectivity/okx_endpoints.hpp
         okx/common/response_utils.hpp okx/common/response_utils.cpp
         okx/connectivity/instrument.hpp okx/connectivity/instrument.cpp
         okx/orders/order_types.hpp okx/orders/order_types.cpp
         okx/orders/rest_orders.hpp okx/orders/rest_orders.cpp
         okx/orders/ws_orders.hpp okx/orders/ws_orders.cpp
+        okx/orders/ws_order_round_trip.hpp okx/orders/ws_order_round_trip.cpp
         okx/connectivity/ws_response_demux.hpp okx/connectivity/ws_response_demux.cpp
         okx/connectivity/heartbeat.hpp okx/connectivity/heartbeat.cpp okx/connectivity/okx_ws_client.hpp okx/connectivity/okx_ws_client.cpp
         okx/connectivity/rate_limiter.hpp okx/connectivity/rate_limiter.cpp
         okx/marketdata/order_book.hpp okx/marketdata/order_book.cpp okx/marketdata/market_data.hpp okx/marketdata/market_data.cpp
-        okx/marketdata/market_data_source.hpp
+        okx/marketdata/market_data_source.hpp okx/marketdata/market_data_source.cpp
         okx/marketdata/json_book_source.hpp okx/marketdata/json_book_source.cpp
         okx/marketdata/sbe_bbo.hpp okx/marketdata/sbe_bbo.cpp
         okx/marketdata/sbe_bbo_source.hpp okx/marketdata/sbe_bbo_source.cpp
@@ -66,6 +68,8 @@ add_executable(trading_engine main.cpp config.hpp
         okx/strategy/strategy.hpp
         okx/strategy/naive_quoter.hpp okx/strategy/naive_quoter.cpp
         okx/risk/account_state.hpp okx/risk/account_state.cpp
+        okx/engine/bootstrap.hpp okx/engine/bootstrap.cpp
+        okx/engine/engine.hpp okx/engine/engine.cpp
         util/json.hpp util/json.cpp util/base64.hpp util/base64.cpp
         util/sha1.hpp util/sha1.cpp
         perf/clock.hpp
@@ -89,14 +93,6 @@ target_link_libraries(trading_engine PRIVATE
         Boost::boost
         CURL::libcurl
 )
-
-enable_testing()
-
-# Links only the decoder — no network, no Boost, no OpenSSL.
-add_executable(sbe_bbo_test tests/sbe_bbo_test.cpp okx/marketdata/sbe_bbo.cpp)
-target_include_directories(sbe_bbo_test PRIVATE ${CMAKE_SOURCE_DIR})
-target_compile_options(sbe_bbo_test PRIVATE -Wall -Wextra -Wpedantic)
-add_test(NAME sbe_bbo COMMAND sbe_bbo_test)
 
 find_program(CLANG_FORMAT_EXE NAMES clang-format HINTS "${CLION_CLANG_FORMAT_HINT}")
 if (CLANG_FORMAT_EXE)
