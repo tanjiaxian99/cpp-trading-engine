@@ -14,21 +14,14 @@ find_package(OpenSSL REQUIRED)
 find_package(Boost REQUIRED)
 find_package(CURL REQUIRED)
 
-# Homebrew's llvm isn't required — CLion ships its own clang-tidy/clang-format,
-# used here as a fallback so the CLI build works without an extra install.
 set(CLION_CLANG_TIDY_HINT "/Applications/CLion.app/Contents/bin/clang/mac/aarch64/bin")
 set(CLION_CLANG_FORMAT_HINT "/Applications/CLion.app/Contents/plugins/clion-radler/DotFiles/macos-arm64")
 
-# Must be set before add_executable(): CXX_CLANG_TIDY is a target property
-# seeded from this variable at target-creation time, not read afterward.
 option(ENABLE_CLANG_TIDY "Run clang-tidy as part of the build" OFF)
 if (ENABLE_CLANG_TIDY)
     find_program(CLANG_TIDY_EXE NAMES clang-tidy HINTS "${CLION_CLANG_TIDY_HINT}" REQUIRED)
     execute_process(COMMAND xcrun --show-sdk-path OUTPUT_VARIABLE MACOS_SDK_PATH OUTPUT_STRIP_TRAILING_WHITESPACE)
     execute_process(COMMAND clang -print-resource-dir OUTPUT_VARIABLE APPLE_CLANG_RESOURCE_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-    # CLion's bundled clang-tidy ships without its own resource-dir (no stdarg.h etc.),
-    # and doesn't infer the SDK sysroot the way /usr/bin/c++ does — borrow both from
-    # Apple clang, which is what actually compiles this project.
     set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE}"
             "--extra-arg=-isysroot${MACOS_SDK_PATH}"
             "--extra-arg=-resource-dir=${APPLE_CLANG_RESOURCE_DIR}")
@@ -78,9 +71,6 @@ add_executable(trading_engine main.cpp config.hpp
         perf/tick_to_trade_stats.hpp perf/tick_to_trade_stats.cpp
         log/async_logger.hpp log/async_logger.cpp)
 
-# Lets every file use root-relative includes (e.g. "okx/connectivity/auth.hpp" from
-# main.cpp, or even from within okx/orders/rest_orders.cpp itself), regardless of
-# which directory the including file lives in.
 target_include_directories(trading_engine PRIVATE ${CMAKE_SOURCE_DIR})
 
 target_compile_options(trading_engine PRIVATE

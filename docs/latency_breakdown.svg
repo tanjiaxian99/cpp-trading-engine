@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="552" viewBox="0 0 780 552" role="img" aria-label="p50 and p99 latency by pipeline stage, JSON L2 book versus SBE L1 top-of-book feed, shown as two separate scales">
+
+  <style>
+    text { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+    .bg { fill: #fcfcfb; }
+    .ink { fill: #0b0b0b; }
+    .secondary { fill: #52514e; }
+    .muted { fill: #898781; }
+    .grid { stroke: #e1e0d9; }
+    .baseline { stroke: #c3c2b7; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .bg { fill: #1a1a19; }
+      :root:not([data-theme="light"]) .ink { fill: #ffffff; }
+      :root:not([data-theme="light"]) .secondary { fill: #c3c2b7; }
+      :root:not([data-theme="light"]) .grid { stroke: #2c2c2a; }
+      :root:not([data-theme="light"]) .baseline { stroke: #383835; }
+    }
+    [data-theme="dark"] .bg { fill: #1a1a19; }
+    [data-theme="dark"] .ink { fill: #ffffff; }
+    [data-theme="dark"] .secondary { fill: #c3c2b7; }
+    [data-theme="dark"] .grid { stroke: #2c2c2a; }
+    [data-theme="dark"] .baseline { stroke: #383835; }
+  </style>
+<rect class="bg" x="0" y="0" width="780" height="552"/>
+<text class="ink" x="20" y="24" font-size="16" font-weight="600">Where the time goes, by stage</text>
+<text class="secondary" x="20" y="43" font-size="12">JSON n=3,691, SBE n=3,623 &#8226; stage medians don't sum to the total</text>
+<rect class="legend-json" x="20" y="52" width="12" height="12" rx="2" fill="#2a78d6"/>
+<text class="secondary" x="38" y="62" font-size="11.5">JSON L2 book</text>
+<rect class="legend-sbe" x="190" y="52" width="12" height="12" rx="2" fill="#eb6834"/>
+<text class="secondary" x="208" y="62" font-size="11.5">SBE L1 top-of-book</text>
+<text class="ink" x="66" y="106" font-size="13" font-weight="600">p50 (ns)</text>
+<line class="grid" x1="66" y1="262.0" x2="770" y2="262.0" stroke-width="1"/>
+<text class="muted" x="58" y="265.5" font-size="10" text-anchor="end">0</text>
+<line class="grid" x1="66" y1="235.6" x2="770" y2="235.6" stroke-width="1"/>
+<text class="muted" x="58" y="239.1" font-size="10" text-anchor="end">1,000</text>
+<line class="grid" x1="66" y1="209.1" x2="770" y2="209.1" stroke-width="1"/>
+<text class="muted" x="58" y="212.6" font-size="10" text-anchor="end">2,000</text>
+<line class="grid" x1="66" y1="182.7" x2="770" y2="182.7" stroke-width="1"/>
+<text class="muted" x="58" y="186.2" font-size="10" text-anchor="end">3,000</text>
+<line class="grid" x1="66" y1="156.3" x2="770" y2="156.3" stroke-width="1"/>
+<text class="muted" x="58" y="159.8" font-size="10" text-anchor="end">4,000</text>
+<line class="grid" x1="66" y1="129.9" x2="770" y2="129.9" stroke-width="1"/>
+<text class="muted" x="58" y="133.4" font-size="10" text-anchor="end">5,000</text>
+<line class="baseline" x1="66" y1="262" x2="770" y2="262" stroke-width="1.5"/>
+<rect class="legend-json" x="83.1" y="258.7" width="30.5" height="3.3" rx="3"><title>WS decode (JSON): 125 ns p50</title></rect>
+<rect class="legend-sbe" x="118.9" y="246.6" width="30.5" height="15.4" rx="3"><title>WS decode (SBE): 583 ns p50</title></rect>
+<text class="secondary" x="116.3" y="279.0" font-size="10.5" text-anchor="middle">WS decode</text>
+<rect class="legend-json" x="183.7" y="152.1" width="30.5" height="109.9" rx="3"><title>Book update (JSON): 4,159 ns p50</title></rect>
+<rect class="legend-sbe" x="219.5" y="239.8" width="30.5" height="22.2" rx="3"><title>Book update (SBE): 839 ns p50</title></rect>
+<text class="secondary" x="216.9" y="279.0" font-size="10.5" text-anchor="middle">Book update</text>
+<rect class="legend-json" x="284.2" y="213.4" width="30.5" height="48.6" rx="3"><title>Order lookup (JSON): 1,839 ns p50</title></rect>
+<rect class="legend-sbe" x="320.1" y="189.3" width="30.5" height="72.7" rx="3"><title>Order lookup (SBE): 2,751 ns p50</title></rect>
+<text class="secondary" x="317.4" y="279.0" font-size="10.5" text-anchor="middle">Order lookup</text>
+<rect class="legend-json" x="384.8" y="257.6" width="30.5" height="4.4" rx="3"><title>Rate limit check (JSON): 167 ns p50</title></rect>
+<rect class="legend-sbe" x="420.7" y="258.7" width="30.5" height="3.3" rx="3"><title>Rate limit check (SBE): 125 ns p50</title></rect>
+<text class="secondary" x="418.0" y="279.0" font-size="10.5" text-anchor="middle">Rate limit check</text>
+<rect class="legend-json" x="485.4" y="258.7" width="30.5" height="3.3" rx="3"><title>Price format (JSON): 125 ns p50</title></rect>
+<rect class="legend-sbe" x="521.2" y="252.1" width="30.5" height="9.9" rx="3"><title>Price format (SBE): 375 ns p50</title></rect>
+<text class="secondary" x="518.6" y="279.0" font-size="10.5" text-anchor="middle">Price format</text>
+<rect class="legend-json" x="586.0" y="228.6" width="30.5" height="33.4" rx="3"><title>Message build (JSON): 1,263 ns p50</title></rect>
+<rect class="legend-sbe" x="621.8" y="225.7" width="30.5" height="36.3" rx="3"><title>Message build (SBE): 1,375 ns p50</title></rect>
+<text class="secondary" x="619.1" y="279.0" font-size="10.5" text-anchor="middle">Message build</text>
+<rect class="legend-json" x="686.5" y="186.8" width="30.5" height="75.2" rx="3"><title>Send (encode+write) (JSON): 2,847 ns p50</title></rect>
+<rect class="legend-sbe" x="722.4" y="111.5" width="30.5" height="150.5" rx="3"><title>Send (encode+write) (SBE): 5,695 ns p50</title></rect>
+<text class="secondary" x="719.7" y="279.0" font-size="10.5" text-anchor="middle">Send</text>
+<text class="secondary" x="719.7" y="292.0" font-size="10.5" text-anchor="middle">(encode+write)</text>
+<text class="ink" x="66" y="342" font-size="13" font-weight="600">p99 (ns)</text>
+<line class="grid" x1="66" y1="498.0" x2="770" y2="498.0" stroke-width="1"/>
+<text class="muted" x="58" y="501.5" font-size="10" text-anchor="end">0</text>
+<line class="grid" x1="66" y1="462.8" x2="770" y2="462.8" stroke-width="1"/>
+<text class="muted" x="58" y="466.3" font-size="10" text-anchor="end">10,000</text>
+<line class="grid" x1="66" y1="427.5" x2="770" y2="427.5" stroke-width="1"/>
+<text class="muted" x="58" y="431.0" font-size="10" text-anchor="end">20,000</text>
+<line class="grid" x1="66" y1="392.3" x2="770" y2="392.3" stroke-width="1"/>
+<text class="muted" x="58" y="395.8" font-size="10" text-anchor="end">30,000</text>
+<line class="grid" x1="66" y1="357.0" x2="770" y2="357.0" stroke-width="1"/>
+<text class="muted" x="58" y="360.5" font-size="10" text-anchor="end">40,000</text>
+<line class="baseline" x1="66" y1="498" x2="770" y2="498" stroke-width="1.5"/>
+<rect class="legend-json" x="83.1" y="494.5" width="30.5" height="3.5" rx="3"><title>WS decode (JSON): 1,007 ns p99</title></rect>
+<rect class="legend-sbe" x="118.9" y="490.7" width="30.5" height="7.3" rx="3"><title>WS decode (SBE): 2,079 ns p99</title></rect>
+<text class="secondary" x="116.3" y="515.0" font-size="10.5" text-anchor="middle">WS decode</text>
+<rect class="legend-json" x="183.7" y="459.7" width="30.5" height="38.3" rx="3"><title>Book update (JSON): 10,879 ns p99</title></rect>
+<rect class="legend-sbe" x="219.5" y="491.6" width="30.5" height="6.4" rx="3"><title>Book update (SBE): 1,823 ns p99</title></rect>
+<text class="secondary" x="216.9" y="515.0" font-size="10.5" text-anchor="middle">Book update</text>
+<rect class="legend-json" x="284.2" y="419.5" width="30.5" height="78.5" rx="3"><title>Order lookup (JSON): 22,271 ns p99</title></rect>
+<rect class="legend-sbe" x="320.1" y="362.7" width="30.5" height="135.3" rx="3"><title>Order lookup (SBE): 38,399 ns p99</title></rect>
+<text class="secondary" x="317.4" y="515.0" font-size="10.5" text-anchor="middle">Order lookup</text>
+<rect class="legend-json" x="384.8" y="495.8" width="30.5" height="2.2" rx="3"><title>Rate limit check (JSON): 631 ns p99</title></rect>
+<rect class="legend-sbe" x="420.7" y="495.8" width="30.5" height="2.2" rx="3"><title>Rate limit check (SBE): 631 ns p99</title></rect>
+<text class="secondary" x="418.0" y="515.0" font-size="10.5" text-anchor="middle">Rate limit check</text>
+<rect class="legend-json" x="485.4" y="493.4" width="30.5" height="4.6" rx="3"><title>Price format (JSON): 1,295 ns p99</title></rect>
+<rect class="legend-sbe" x="521.2" y="492.8" width="30.5" height="5.2" rx="3"><title>Price format (SBE): 1,471 ns p99</title></rect>
+<text class="secondary" x="518.6" y="515.0" font-size="10.5" text-anchor="middle">Price format</text>
+<rect class="legend-json" x="586.0" y="478.2" width="30.5" height="19.8" rx="3"><title>Message build (JSON): 5,631 ns p99</title></rect>
+<rect class="legend-sbe" x="621.8" y="457.0" width="30.5" height="41.0" rx="3"><title>Message build (SBE): 11,647 ns p99</title></rect>
+<text class="secondary" x="619.1" y="515.0" font-size="10.5" text-anchor="middle">Message build</text>
+<rect class="legend-json" x="686.5" y="423.1" width="30.5" height="74.9" rx="3"><title>Send (encode+write) (JSON): 21,247 ns p99</title></rect>
+<rect class="legend-sbe" x="722.4" y="394.3" width="30.5" height="103.7" rx="3"><title>Send (encode+write) (SBE): 29,439 ns p99</title></rect>
+<text class="secondary" x="719.7" y="515.0" font-size="10.5" text-anchor="middle">Send</text>
+<text class="secondary" x="719.7" y="528.0" font-size="10.5" text-anchor="middle">(encode+write)</text>
+<style>.legend-json { fill: #2a78d6; } .legend-sbe { fill: #eb6834; } @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .legend-json { fill: #3987e5; } :root:not([data-theme="light"]) .legend-sbe { fill: #d95926; } }
+[data-theme="dark"] .legend-json { fill: #3987e5; } [data-theme="dark"] .legend-sbe { fill: #d95926; }</style>
+</svg>
